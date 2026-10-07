@@ -1,0 +1,46 @@
+/* BULBASAUR COLORS:
+ * #7ECAAB (cyan) (c:black)
+ * #BD3954 (red) (c:white)
+ * #4F8043 (dark green) (c:white>black)
+ * #77A559 (light green) (c:black)
+ * #1A7473 (dark cyan) (c:white)
+ */
+
+body {
+  font-family: "Silkscreen";
+}
+
+div {
+  border-radius: 10px;
+  padding: 10px;
+  box-sizing: border-box;
+  margin: 10px;
+}
+
+.cyan {
+  background-color: #7ECAAB;
+}
+
+.red {
+  background-color: #BD3954;
+}
+
+.dark-green {
+  background-color: #4F8043;
+}
+
+.light-green {
+  background-color: #77A559;
+}
+
+.dark-cyan {
+  background-color: #1A7473;
+}
+
+.black {
+  color: black;
+}
+
+.white {
+  color: white;
+}

@@ -1,0 +1,174 @@
+/* BULBASAUR COLORS:
+ * #7ECAAB (cyan) (c:black)
+ * #BD3954 (red) (c:white)
+ * #4F8043 (dark green) (c:white>black)
+ * #77A559 (light green) (c:black)
+ * #1A7473 (dark cyan) (c:white)
+ */
+
+:root {
+  --color001: #7ECAAB;
+  --color002: #1A7473;
+  --color003: white;
+  --color004: black;
+}
+
+body[data-theme="dark"] {
+  --color001: #1A7473;
+  --color002: #7ECAAB;
+  --color003: black;
+  --color004: white;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  font-family: "Silkscreen";
+
+  position: relative;
+  min-height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow-x: hidden;
+}
+
+
+/* ================================================================
+   BACKGROUND
+   ================================================================ */
+
+#background {
+  position: fixed;
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  z-index: 0;
+
+  pointer-events: none;
+}
+
+
+/* ================================================================
+   CONTEÚDO
+   ================================================================ */
+
+header,
+main,
+footer {
+  position: relative;
+  z-index: 1;
+}
+
+
+/* ================================================================
+   HEADER
+   ================================================================ */
+
+header {
+  padding: 20px;
+  background: rgb(0 0 0 / 40%);
+}
+
+
+/* ================================================================
+   MAIN
+   ================================================================ */
+
+main {
+  flex: 1;
+  padding: 20px;
+}
+
+
+/* ================================================================
+   FOOTER
+   ================================================================ */
+
+footer {
+  padding: 20px;
+  background: rgb(0 0 0 / 40%);
+}
+
+
+/* ================================================================
+   VÍDEO
+   ================================================================ */
+
+video {
+  display: none;
+}
+
+.options {
+  background-color: var(--color003);
+  color: var(--color004);
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 5px;
+  border: 5px solid var(--color002);
+  gap: 5px;
+}
+
+button {
+  border: none;
+}
+
+button,
+a.button {
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 1em;
+  background-color: var(--color002);
+  color: var(--color003);
+  padding: 10px;
+  border-radius: 5px;
+  text-align: center;
+  width: 50%;
+  user-select: none;
+  transition: transform 0.5s;
+}
+
+button:active,
+a.button:active {
+  transform: scale(0.9);
+}
+
+#play {
+  animation: dancing 2s step-end infinite;
+}
+
+@keyframes dancing {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(5deg);
+  }
+
+  50% {
+    transform: rotate(0deg);
+  }
+
+  75% {
+    transform: rotate(-5deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
+}

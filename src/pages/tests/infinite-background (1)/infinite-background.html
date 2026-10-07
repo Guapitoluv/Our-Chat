@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Infinite Video Background</title>
+  
+  <link
+    rel="stylesheet"
+    href="../../../fonts/silkscreen.css"
+  >
+  <link
+    rel="stylesheet"
+    href="infinite-background.css"
+  >
+</head>
+
+<body data-theme="light">
+  <canvas id="background"></canvas>
+
+  <header>
+    <div style="display:flex;padding:10px;align-items:center;background-color:black;margin:-20px;margin-bottom:10px;color:white;">
+      <p>Our Chat</p>
+      <img style="margin-left:auto;border-radius:30px" width="40" height="40" src="./default-profile.png">
+    </div>
+    <h1 style="color:white;">Bem-vindo ao Nosso Chat</h1>
+  </header>
+
+  <main>
+    <section class="options">
+      <h2>Options</h2>
+      
+      <button id="play">Play</button>
+      <button id="toggle-theme">
+        Toggle Theme
+      </button>
+      <a class="button" href="./conversation/conversation.html">Chat</a>
+      <a class="button">Midia</a>
+    </section>
+  </main>
+  
+  <audio
+    id="music"
+    src="music.mp3"
+    loop
+  ></audio>
+
+  <script src="./infinite-background.js"></script>
+  <script src="./toggle-theme.js"></script>
+</body>
+
+</html>

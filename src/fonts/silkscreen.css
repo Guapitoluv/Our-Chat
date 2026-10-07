@@ -1,0 +1,27 @@
+@font-face { /* EXTRA LIGHT */
+  font-family: "Silkscreen";
+  src: url("../../public/fonts/silkscreen/slkscre.ttf");
+  font-weight: 200;
+  font-style: normal
+}
+
+@font-face { /* REGULAR */
+  font-family: "Silkscreen";
+  src: url("../../public/fonts/silkscreen/slkscr.ttf");
+  font-weight: 400;
+  font-style: normal
+}
+
+@font-face { /* BOLD */
+  font-family: "Silkscreen";
+  src: url("../../public/fonts/silkscreen/slkscrb.ttf");
+  font-weight: 700;
+  font-style: normal
+}
+
+@font-face { /* EXTRA BOLD */
+  font-family: "Silkscreen";
+  src: url("../../public/fonts/silkscreen/slkscreb.ttf");
+  font-weight: 800;
+  font-style: normal
+}

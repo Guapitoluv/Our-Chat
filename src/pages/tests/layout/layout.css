@@ -1,0 +1,109 @@
+/* ========================================
+   BULBASAUR PALETTE
+   ======================================== */
+
+:root {
+  --color-cyan: #7ECAAB;
+  --color-red: #BD3954;
+  --color-dark-green: #4F8043;
+  --color-light-green: #77A559;
+  --color-dark-cyan: #1A7473;
+
+  /* Contrast */
+  --contrast-cyan: #000;
+  --contrast-red: #FFF;
+  --contrast-dark-green: #FFF;
+  --contrast-light-green: #000;
+  --contrast-dark-cyan: #FFF;
+
+
+  /* ======================================
+     Theme
+     ====================================== */
+
+  --background: var(--color-cyan);
+  --text: var(--contrast-cyan);
+
+  --primary: var(--color-dark-cyan);
+  --primary-text: var(--contrast-dark-cyan);
+
+  --danger: var(--color-red);
+  --danger-text: var(--contrast-red);
+
+  --secondary: var(--color-dark-green);
+  --secondary-text: var(--contrast-dark-green);
+}
+
+
+/* ========================================
+   BASE
+   ======================================== */
+
+body {
+  font-family: "Silkscreen", sans-serif;
+  background-color: var(--background);
+  color: var(--text);
+}
+
+
+/* ========================================
+   COMPONENTS
+   ======================================== */
+
+.primary {
+  background-color: var(--primary);
+  color: var(--primary-text);
+}
+
+.danger {
+  background-color: var(--danger);
+  color: var(--danger-text);
+}
+
+.secondary {
+  background-color: var(--secondary);
+  color: var(--secondary-text);
+}
+
+/**/
+
+header {
+  border-radius: 10px;
+  text-align: center;
+  padding: 10px;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  margin: 5px;
+}
+
+a.button {
+  background-color: var(--color-red);
+  display: block;
+  padding: 5px;
+  margin: 5px;
+  border-radius: 5px;
+  text-align: center;
+  transition: padding 0.5s;
+}
+
+a.button:active {
+  animation: click 0.2s ease-out;
+}
+
+@keyframes click {
+  0% {
+    transform: scale(1);
+  }
+  
+  50% {
+    transform: scale(0.5);
+  }
+  
+  100% {
+    transform: scale(1);
+  }
+}
