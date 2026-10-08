@@ -1,0 +1,11 @@
+.test-page {
+    padding: 20px;
+}
+
+.test-page h1 {
+    font-size: 32px;
+}
+
+.test-page button {
+    padding: 10px 20px;
+}

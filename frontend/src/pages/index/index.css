@@ -1,0 +1,161 @@
+.home-page {
+  --color001: #7ECAAB;
+  --color002: #1A7473;
+  --color003: white;
+  --color004: black;
+
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+
+  font-family: "Silkscreen", sans-serif;
+}
+
+.home-page[data-theme="dark"] {
+  --color001: #1A7473;
+  --color002: #7ECAAB;
+  --color003: black;
+  --color004: white;
+}
+
+.home-page #background {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+
+  z-index: 0;
+  pointer-events: none;
+}
+
+.console-input {
+  width: 100%;
+}
+
+.command-list {
+  display: none;
+}
+
+.home-page .home-header,
+.home-page .home-main {
+  position: relative;
+  z-index: 1;
+}
+
+.home-page .home-header {
+  padding: 20px;
+  background-color: rgb(0 0 0 / 40%);
+  color: white;
+}
+
+.home-page .topbar {
+  display: flex;
+  align-items: center;
+
+  padding: 10px;
+  margin: -20px;
+  margin-bottom: 10px;
+
+  background-color: black;
+  color: white;
+}
+
+.home-page .brand {
+  margin: 0;
+}
+
+.home-page .profile-image {
+  margin-left: auto;
+  border-radius: 50%;
+}
+
+.home-page h1 {
+  margin: 0;
+}
+
+.home-page .home-main {
+  flex: 1;
+  padding: 20px;
+}
+
+.home-page .options {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 5px;
+  padding: 10px;
+
+  background-color: var(--color003);
+  color: var(--color004);
+
+  border: 5px solid var(--color002);
+  border-radius: 5px;
+}
+
+.home-page .options h2 {
+  margin-bottom: 5px;
+}
+
+.home-page button {
+  border: none;
+}
+
+.home-page button,
+.home-page a.button {
+  width: 50%;
+
+  padding: 10px;
+
+  font-family: inherit;
+  font-size: 1em;
+  font-weight: 400;
+  text-align: center;
+  text-decoration: none;
+
+  background-color: var(--color002);
+  color: var(--color003);
+
+  border-radius: 5px;
+
+  user-select: none;
+
+  transition: transform 0.5s;
+}
+
+.home-page button:active,
+.home-page a.button:active {
+  transform: scale(0.9);
+}
+
+.home-page #play {
+  animation: dancing 2s step-end infinite;
+}
+
+.home-page audio {
+  display: none;
+}
+
+@keyframes dancing {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(5deg);
+  }
+
+  50% {
+    transform: rotate(0deg);
+  }
+
+  75% {
+    transform: rotate(-5deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
+}
