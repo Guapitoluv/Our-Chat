@@ -1,1 +1,3 @@
 aiohttp
+aiosqlite
+argon2-cffi
