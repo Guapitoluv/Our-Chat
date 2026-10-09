@@ -5,15 +5,21 @@ import { InfiniteVideoBackground }
 
 import { router } from "../../../router-instance.js";
 
+import { Search } from "./search.js";
+
 
 export class IndexPage extends Page {
     constructor() {
         super(
-            "/src/pages/index/index.html"
+            "./src/pages/index/index.html"
         );
         
         this.background = null;
         this.consoleInput = null;
+        this.commandList = null;
+        this.commands = [
+            "chat"
+        ]
     }
 
 
@@ -23,6 +29,57 @@ export class IndexPage extends Page {
                 "#console-input"
             );
         
+        this.commandList =
+            document.querySelector(
+                "#command-list"
+            );
+        
+        this.consoleInput.addEventListener(
+            "input",
+            () => {
+                const result = new Search().search(
+                    this.consoleInput.value,
+                    this.commands
+                );
+
+                if (
+                    Object.values(result).every(
+                        item => item.length === 0
+                    )
+                ) {
+                    this.commandList.classList.add("empty");
+                    return;
+                }
+
+                this.commandList.classList.remove("empty");
+
+                for (
+                    const [key,matches]
+                    of Object.entries(result)
+                ) {
+                    if (matches.length === 0) continue;
+                    console.log(key);
+
+                    const el = document.createElement("li");
+
+                    let lastIndex = 0;
+
+                    for (
+                        const [start,end]
+                        of Object.entries(matches)
+                    ) {
+                        el.innerHTML += key.slice(lastIndex, start);
+                        el.innerHTML += `<b>${key.slice(start, end)}<b>`;
+                        lastIndex = end;
+                    }
+
+                    el.innerHTML += key.slice(lastIndex);
+
+                    this.commandList.append(el);
+                }
+            }
+        );
+
         this.consoleInput.addEventListener(
             "keydown",
             (event) => {
@@ -60,7 +117,7 @@ export class IndexPage extends Page {
             new InfiniteVideoBackground(
                 canvas,
 
-                "/public/videos/video-light.mp4",
+                "./public/videos/video-light.mp4",
 
                 {
                     tileWidth: 80,

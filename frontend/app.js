@@ -19,8 +19,8 @@ try {
             page: IndexPage,
             
             css: [
-                "/src/pages/index/index.css",
-                "/public/fonts/silkscreen/silkscreen.css"
+                "./src/pages/index/index.css",
+                "./public/fonts/silkscreen/silkscreen.css"
             ]
         }
     );
@@ -31,13 +31,12 @@ try {
             page: ConversationPage,
             
             css: [
-                "/src/pages/conversation/conversation.css",
-                "/public/fonts/silkscreen/silkscreen.css"
+                "./src/pages/conversation/conversation.css",
+                "./public/fonts/silkscreen/silkscreen.css"
             ]
         }
     );
-    
-    
+
     router.renderRoute();
     
 } catch (error) {

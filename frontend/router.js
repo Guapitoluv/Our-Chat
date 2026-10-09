@@ -87,7 +87,7 @@ export class Router {
     
     
     async renderRoute(
-        path = location.pathname
+        path = "/"
     ) {
         const route =
             this.#routes.get(path);

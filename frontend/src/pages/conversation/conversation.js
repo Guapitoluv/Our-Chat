@@ -57,7 +57,7 @@ export class ConversationPage
 {
     constructor() {
         super(
-            "/src/pages/conversation/conversation.html"
+            "./src/pages/conversation/conversation.html"
         );
         
         this.msgs = [];
