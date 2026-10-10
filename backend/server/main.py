@@ -110,13 +110,14 @@ async def websocket_handler(request):
                     if not isinstance(request_id, str):
                         raise ValueError("requestId inválido.")
 
+                    # No websocket_handler do main.py
                     if message_type == "sign_up":
-                        if not isinstance(payload, dict):
-                            raise ValueError("payload inválido.")
                         await handle_sign_up(request.app['db_pool'], ws, request_id, payload)
-
+                    elif message_type == "sign_in":
+                        await handle_sign_in(request.app['db_pool'], ws, request_id, payload)
                     elif message_type == "get_users":
                         await handle_get_users(request.app['db_pool'], ws, request_id)
+
 
                     else:
                         await send_error(ws, request_id, "Tipo de mensagem desconhecido.")
@@ -220,6 +221,50 @@ async def handle_sign_up(db_pool, ws, request_id, payload):
             "name": name
         }
     })
+
+
+async def handle_sign_in(db_pool, ws, request_id, payload):
+    email = payload.get("email")
+    password = payload.get("password")
+
+    if not isinstance(email, str) or not isinstance(password, str):
+        await send_error(ws, request_id, "Campos inválidos.")
+        return
+
+    email = email.strip().lower()
+
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, name, email, password_hash, public_key, encrypted_backup FROM users WHERE email = $1",
+            email
+        )
+
+        if not row:
+            await send_error(ws, request_id, "E-mail ou senha incorretos.")
+            return
+
+        # Verifica a senha usando Argon2
+        try:
+            password_hasher.verify(row["password_hash"], password)
+        except Exception:
+            await send_error(ws, request_id, "E-mail ou senha incorretos.")
+            return
+
+        user_data = format_user_row(row)
+
+        await ws.send_json({
+            "type": "sign_in_success",
+            "requestId": request_id,
+            "payload": {
+                "user": {
+                    "id": user_data["id"],
+                    "name": user_data["name"],
+                    "email": user_data["email"],
+                    "publicKey": user_data["public_key"]
+                },
+                "encryptedBackup": user_data["encrypted_backup"]
+            }
+        })
 
 
 async def send_error(ws, request_id, message):
