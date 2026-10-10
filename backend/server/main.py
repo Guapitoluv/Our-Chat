@@ -45,11 +45,35 @@ async def initialize_database():
 
 
 async def health_check(request):
-    """Endpoint HTTP simples para verificar se a API está ativa no Render."""
+    """Endpoint HTTP para verificar status do servidor."""
     return web.json_response({
         "status": "ok",
         "service": "OurChat API"
     })
+
+
+async def get_users_http(request):
+    """Endpoint HTTP REST para listar usuários do SQLite."""
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT id, name, email, public_key, created_at FROM users ORDER BY created_at DESC"
+            ) as cursor:
+                rows = await cursor.fetchall()
+                users = []
+                for row in rows:
+                    user_dict = dict(row)
+                    # Converte public_key de JSON string de volta para objeto se possível
+                    try:
+                        user_dict["public_key"] = json.loads(user_dict["public_key"])
+                    except Exception:
+                        pass
+                    users.append(user_dict)
+
+                return web.json_response({"users": users})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 
 async def websocket_handler(request):
@@ -72,20 +96,19 @@ async def websocket_handler(request):
 
                     message_type = data.get("type")
                     request_id = data.get("requestId")
-                    payload = data.get("payload")
+                    payload = data.get("payload", {})
 
                     if not isinstance(request_id, str):
                         raise ValueError("requestId inválido.")
 
-                    if not isinstance(payload, dict):
-                        raise ValueError("payload inválido.")
-
                     if message_type == "sign_up":
-                        await handle_sign_up(
-                            ws,
-                            request_id,
-                            payload
-                        )
+                        if not isinstance(payload, dict):
+                            raise ValueError("payload inválido.")
+                        await handle_sign_up(ws, request_id, payload)
+
+                    elif message_type == "get_users":
+                        await handle_get_users(ws, request_id)
+
                     else:
                         await send_error(
                             ws,
@@ -111,6 +134,25 @@ async def websocket_handler(request):
         print("Cliente desconectado.")
 
     return ws
+
+
+async def handle_get_users(ws, request_id):
+    """Busca usuários no banco de dados e envia via WebSocket."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT id, name, email, public_key, created_at FROM users ORDER BY created_at DESC"
+        ) as cursor:
+            rows = await cursor.fetchall()
+            users = [dict(row) for row in rows]
+
+    await ws.send_json({
+        "type": "get_users_success",
+        "requestId": request_id,
+        "payload": {
+            "users": users
+        }
+    })
 
 
 async def handle_sign_up(ws, request_id, payload):
@@ -274,8 +316,9 @@ async def on_startup(app):
 
 app = web.Application()
 
-# Mapeamento de rotas exclusivas do backend
+# Rotas do Servidor
 app.router.add_get("/", health_check)
+app.router.add_get("/api/users", get_users_http)
 app.router.add_get("/ws", websocket_handler)
 
 app.on_startup.append(on_startup)
