@@ -22,7 +22,13 @@ async def initialize_database(app):
     print("Conectando ao banco de dados Supabase...")
     
     # Cria o pool de conexões reutilizável
-    app['db_pool'] = await asyncpg.create_pool(DATABASE_URL)
+    app['db_pool'] = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=1,
+        max_size=5,  # Mantém no máximo 5 conexões abertas por instância
+        statement_cache_size=0  # Obrigatório para o Transaction Pooler do Supabase
+    )
+
 
     async with app['db_pool'].acquire() as conn:
         await conn.execute("""
