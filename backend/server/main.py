@@ -63,14 +63,27 @@ def format_user_row(row):
     user = dict(row)
     if user.get("created_at"):
         user["created_at"] = user["created_at"].isoformat()
-    
+
     # Se public_key ou encrypted_backup vierem como string JSON, faz a conversão
     if isinstance(user.get("public_key"), str):
         user["public_key"] = json.loads(user["public_key"])
     if isinstance(user.get("encrypted_backup"), str):
         user["encrypted_backup"] = json.loads(user["encrypted_backup"])
-        
+
     return user
+
+
+def format_user_payload(user_row):
+    """Retorna o objeto 'user' no formato padrão camelCase para as respostas do frontend."""
+    user_data = format_user_row(user_row)
+    return {
+        "id": user_data["id"],
+        "name": user_data["name"],
+        "email": user_data["email"],
+        "role": user_data.get("role", "user"),
+        "publicKey": user_data.get("public_key"),
+        "createdAt": user_data.get("created_at")
+    }
 
 
 async def get_users_http(request):
@@ -83,7 +96,7 @@ async def get_users_http(request):
                 FROM users 
                 ORDER BY created_at DESC
             """)
-            users = [format_user_row(r) for r in rows]
+            users = [format_user_payload(r) for r in rows]
             return web.json_response({"users": users})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -110,15 +123,12 @@ async def websocket_handler(request):
                     if not isinstance(request_id, str):
                         raise ValueError("requestId inválido.")
 
-                    # No websocket_handler do main.py
                     if message_type == "sign_up":
                         await handle_sign_up(request.app['db_pool'], ws, request_id, payload)
                     elif message_type == "sign_in":
                         await handle_sign_in(request.app['db_pool'], ws, request_id, payload)
                     elif message_type == "get_users":
                         await handle_get_users(request.app['db_pool'], ws, request_id)
-
-
                     else:
                         await send_error(ws, request_id, "Tipo de mensagem desconhecido.")
 
@@ -141,7 +151,7 @@ async def handle_get_users(db_pool, ws, request_id):
             FROM users 
             ORDER BY created_at DESC
         """)
-        users = [format_user_row(r) for r in rows]
+        users = [format_user_payload(r) for r in rows]
 
     await ws.send_json({
         "type": "get_users_success",
@@ -192,12 +202,12 @@ async def handle_sign_up(db_pool, ws, request_id, payload):
 
     try:
         async with db_pool.acquire() as conn:
-            # Passamos o json.dumps para garantir compatibilidade se a coluna for salva como texto/jsonb
-            await conn.execute(
+            row = await conn.fetchrow(
                 """
                 INSERT INTO users (
                     id, name, email, password_hash, public_key, encrypted_backup
                 ) VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id, name, email, role, public_key, created_at
                 """,
                 user_id,
                 name,
@@ -217,8 +227,7 @@ async def handle_sign_up(db_pool, ws, request_id, payload):
         "type": "sign_up_success",
         "requestId": request_id,
         "payload": {
-            "userId": user_id,
-            "name": name
+            "user": format_user_payload(row)
         }
     })
 
@@ -235,7 +244,11 @@ async def handle_sign_in(db_pool, ws, request_id, payload):
 
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, name, email, password_hash, public_key, encrypted_backup FROM users WHERE email = $1",
+            """
+            SELECT id, name, email, password_hash, public_key, encrypted_backup, role, created_at 
+            FROM users 
+            WHERE email = $1
+            """,
             email
         )
 
@@ -256,12 +269,7 @@ async def handle_sign_in(db_pool, ws, request_id, payload):
             "type": "sign_in_success",
             "requestId": request_id,
             "payload": {
-                "user": {
-                    "id": user_data["id"],
-                    "name": user_data["name"],
-                    "email": user_data["email"],
-                    "publicKey": user_data["public_key"]
-                },
+                "user": format_user_payload(row),
                 "encryptedBackup": user_data["encrypted_backup"]
             }
         })
