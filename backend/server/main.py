@@ -8,27 +8,26 @@ from aiohttp import web
 from argon2 import PasswordHasher
 from argon2.exceptions import HashingError
 
-# Pega a URL do ambiente (Render) ou usa a URL informada diretamente em desenvolvimento
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres:SUA_SENHA_AQUI@db.SEU_PROJETO_AQUI.supabase.co:5432/postgres"
-)
+# Pega a URL da variável de ambiente configurada no Render
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("A variável de ambiente DATABASE_URL não foi definida!")
+
 
 password_hasher = PasswordHasher()
 
 
 async def initialize_database(app):
-    """Cria o pool de conexões assíncronas com o Supabase e cria a tabela se não existir."""
+    """Inicializa o pool de conexões com o Supabase e cria a tabela se necessário."""
     print("Conectando ao banco de dados Supabase...")
-    
-    # Cria o pool de conexões reutilizável
+
     app['db_pool'] = await asyncpg.create_pool(
         DATABASE_URL,
         min_size=1,
-        max_size=5,  # Mantém no máximo 5 conexões abertas por instância
-        statement_cache_size=0  # Obrigatório para o Transaction Pooler do Supabase
+        max_size=5,
+        statement_cache_size=0  # Necessário para o Transaction Pooler do Supabase
     )
-
 
     async with app['db_pool'].acquire() as conn:
         await conn.execute("""
@@ -47,8 +46,9 @@ async def initialize_database(app):
 
 
 async def cleanup_database(app):
-    """Fecha a conexão com o Supabase ao desligar o servidor."""
-    await app['db_pool'].close()
+    """Fecha o pool de conexões ao encerrar o servidor."""
+    if 'db_pool' in app:
+        await app['db_pool'].close()
 
 
 async def health_check(request):
@@ -58,8 +58,23 @@ async def health_check(request):
     })
 
 
+def format_user_row(row):
+    """Helper para formatar registros de usuário do banco para JSON seguro."""
+    user = dict(row)
+    if user.get("created_at"):
+        user["created_at"] = user["created_at"].isoformat()
+    
+    # Se public_key ou encrypted_backup vierem como string JSON, faz a conversão
+    if isinstance(user.get("public_key"), str):
+        user["public_key"] = json.loads(user["public_key"])
+    if isinstance(user.get("encrypted_backup"), str):
+        user["encrypted_backup"] = json.loads(user["encrypted_backup"])
+        
+    return user
+
+
 async def get_users_http(request):
-    """Rota HTTP REST para listar usuários salvos no Supabase."""
+    """Rota HTTP REST para listar usuários."""
     db_pool = request.app['db_pool']
     try:
         async with db_pool.acquire() as conn:
@@ -68,18 +83,7 @@ async def get_users_http(request):
                 FROM users 
                 ORDER BY created_at DESC
             """)
-            
-            users = []
-            for row in rows:
-                user_dict = dict(row)
-                if user_dict.get("created_at"):
-                    user_dict["created_at"] = user_dict["created_at"].isoformat()
-                
-                # Converte o JSONB retornado pelo asyncpg
-                if isinstance(user_dict.get("public_key"), str):
-                    user_dict["public_key"] = json.loads(user_dict["public_key"])
-                users.append(user_dict)
-
+            users = [format_user_row(r) for r in rows]
             return web.json_response({"users": users})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
@@ -136,12 +140,7 @@ async def handle_get_users(db_pool, ws, request_id):
             FROM users 
             ORDER BY created_at DESC
         """)
-        users = []
-        for r in rows:
-            u = dict(r)
-            if u.get("created_at"):
-                u["created_at"] = u["created_at"].isoformat()
-            users.append(u)
+        users = [format_user_row(r) for r in rows]
 
     await ws.send_json({
         "type": "get_users_success",
@@ -192,6 +191,7 @@ async def handle_sign_up(db_pool, ws, request_id, payload):
 
     try:
         async with db_pool.acquire() as conn:
+            # Passamos o json.dumps para garantir compatibilidade se a coluna for salva como texto/jsonb
             await conn.execute(
                 """
                 INSERT INTO users (
