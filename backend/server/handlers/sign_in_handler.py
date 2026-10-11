@@ -5,8 +5,8 @@ import jwt
 from aiohttp import web
 from argon2 import PasswordHasher
 
-from ..authenticated_websocket import AuthenticatedWebSocket
-from ..formatation import format_user_row, format_user_payload
+from authenticated_websocket import AuthenticatedWebSocket
+from formatation import format_user_row, format_user_payload
 
 
 class SignInHandler:
