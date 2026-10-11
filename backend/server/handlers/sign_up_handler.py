@@ -82,7 +82,6 @@ class SignUpHandler:
             )
 
             # Atualiza a sessão e a lista de conexões ativas
-            ws.set_authenticated(True)
             ws.set_user_id(user_id)
             app['active_connections'][user_id] = ws
 
