@@ -139,6 +139,8 @@ async def websocket_handler(request):
                         await handle_conversation_response(request.app, ws, request_id, payload)
                     elif message_type == "send_message":
                         await handle_send_message(request.app, ws, request_id, payload)
+                    elif message_type == "get_messages":
+                        await handle_get_messages(request.app, ws, request_id, payload)
                     else:
                         await send_error(ws, request_id, "Tipo de mensagem desconhecido.")
 
@@ -455,6 +457,62 @@ async def handle_send_message(app, ws, request_id, payload):
                 "iv": iv
             }
         })
+
+
+async def handle_get_messages(app, ws, request_id, payload):
+    if not ws.user_id:
+        await send_error(ws, request_id, "Não autenticado.")
+        return
+
+    conversation_id = payload.get("conversationId")
+    if not conversation_id:
+        await send_error(ws, request_id, "conversationId é obrigatório.")
+        return
+
+    async with app['db_pool'].acquire() as conn:
+        # 1. Valida se o usuário logado faz parte dessa conversa
+        conv = await conn.fetchrow(
+            """
+            SELECT id FROM conversations 
+            WHERE id = $1 AND (requester_id = $2 OR recipient_id = $2)
+            """,
+            conversation_id, ws.user_id
+        )
+
+        if not conv:
+            await send_error(ws, request_id, "Conversa não encontrada ou não autorizada.")
+            return
+
+        # 2. Busca todas as mensagens da conversa ordenadas por data
+        rows = await conn.fetch(
+            """
+            SELECT id, conversation_id, sender_id, ciphertext, iv, created_at
+            FROM messages
+            WHERE conversation_id = $1
+            ORDER BY created_at ASC
+            """,
+            conversation_id
+        )
+
+        messages = []
+        for r in rows:
+            messages.append({
+                "id": r["id"],
+                "conversationId": r["conversation_id"],
+                "senderId": r["sender_id"],
+                "ciphertext": r["ciphertext"],
+                "iv": r["iv"],
+                "createdAt": r["created_at"].isoformat() if r["created_at"] else None
+            })
+
+    await ws.send_json({
+        "type": "get_messages_success",
+        "requestId": request_id,
+        "payload": {
+            "conversationId": conversation_id,
+            "messages": messages
+        }
+    })
 
 
 app = web.Application()
