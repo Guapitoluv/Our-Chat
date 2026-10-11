@@ -131,6 +131,8 @@ async def websocket_handler(request):
                         await handle_sign_in(request.app, ws, request_id, payload)
                     elif message_type == "get_users":
                         await handle_get_users(request.app['db_pool'], ws, request_id)
+                    elif message_type == "get_conversations":
+                        await handle_get_conversations(request.app, ws, request_id)
                     elif message_type == "conversation_request":
                         await handle_conversation_request(request.app, ws, request_id, payload)
                     elif message_type == "conversation_response":
@@ -252,6 +254,41 @@ async def handle_get_users(db_pool, ws, request_id):
     })
 
 
+async def handle_get_conversations(app, ws, request_id):
+    """Retorna todas as conversas das quais o usuário conectado faz parte."""
+    if not ws.user_id:
+        await send_error(ws, request_id, "Não autenticado.")
+        return
+
+    async with app['db_pool'].acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, requester_id, recipient_id, status, created_at, updated_at
+            FROM conversations
+            WHERE requester_id = $1 OR recipient_id = $1
+            ORDER BY updated_at DESC
+            """,
+            ws.user_id
+        )
+
+        conversations = []
+        for r in rows:
+            conversations.append({
+                "id": r["id"],
+                "requesterId": r["requester_id"],
+                "recipientId": r["recipient_id"],
+                "otherUserId": r["recipient_id"] if r["requester_id"] == ws.user_id else r["requester_id"],
+                "status": r["status"],
+                "createdAt": r["created_at"].isoformat() if r["created_at"] else None
+            })
+
+    await ws.send_json({
+        "type": "get_conversations_success",
+        "requestId": request_id,
+        "payload": {"conversations": conversations}
+    })
+
+
 async def handle_conversation_request(app, ws, request_id, payload):
     if not ws.user_id:
         await send_error(ws, request_id, "Não autenticado.")
@@ -266,7 +303,7 @@ async def handle_conversation_request(app, ws, request_id, payload):
         # BUSCA BI-DIRECIONAL: Checa se A -> B ou B -> A já existe
         existing_conv = await conn.fetchrow(
             """
-            SELECT id, status FROM conversations 
+            SELECT id, requester_id, recipient_id, status FROM conversations 
             WHERE (requester_id = $1 AND recipient_id = $2)
                OR (requester_id = $2 AND recipient_id = $1)
             """,
@@ -276,9 +313,11 @@ async def handle_conversation_request(app, ws, request_id, payload):
         if existing_conv:
             conversation_id = existing_conv["id"]
             conv_status = existing_conv["status"]
+            requester_id = existing_conv["requester_id"]
         else:
             conversation_id = str(uuid.uuid4())
             conv_status = "pending"
+            requester_id = ws.user_id
             await conn.execute(
                 """
                 INSERT INTO conversations (id, requester_id, recipient_id, status)
@@ -293,20 +332,22 @@ async def handle_conversation_request(app, ws, request_id, payload):
         "requestId": request_id,
         "payload": {
             "conversationId": conversation_id,
-            "status": conv_status
+            "status": conv_status,
+            "requesterId": requester_id
         }
     })
 
-    # Notifica o destinatário em tempo real (se estiver online)
-    recipient_ws = app['active_connections'].get(recipient_id)
-    if recipient_ws:
-        await recipient_ws.send_json({
-            "type": "incoming_conversation_request",
-            "payload": {
-                "conversationId": conversation_id,
-                "requesterId": ws.user_id
-            }
-        })
+    # Notifica o destinatário em tempo real se for uma nova solicitação pendente
+    if conv_status == "pending" and requester_id == ws.user_id:
+        recipient_ws = app['active_connections'].get(recipient_id)
+        if recipient_ws:
+            await recipient_ws.send_json({
+                "type": "incoming_conversation_request",
+                "payload": {
+                    "conversationId": conversation_id,
+                    "requesterId": ws.user_id
+                }
+            })
 
 
 async def handle_conversation_response(app, ws, request_id, payload):
@@ -360,7 +401,7 @@ async def handle_send_message(app, ws, request_id, payload):
         return
 
     conversation_id = payload.get("conversationId")
-    
+
     # Trata o payload se o ciphertext vier na raiz ou aninhado em 'message'
     message_data = payload.get("message") or {}
     ciphertext = payload.get("ciphertext") or message_data.get("ciphertext")
