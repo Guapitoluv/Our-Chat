@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import asyncio
 from pathlib import Path
@@ -9,23 +8,19 @@ from typing import Any, Callable, Awaitable
 import asyncpg
 from aiohttp import web
 from argon2 import PasswordHasher
+# Em backend/server/main.py
 
-# Adiciona o diretório 'backend/server' ao caminho de módulos do Python
-BASE_DIR = Path(__file__).resolve().parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+from backend.server.handlers.send_message_handler import SendMessageHandler
+from backend.server.handlers.authentication_handler import AuthenticationHandler
+from backend.server.handlers.sign_up_handler import SignUpHandler
+from backend.server.handlers.sign_in_handler import SignInHandler
+from backend.server.handlers.get_messages_handler import GetMessagesHandler
+from backend.server.handlers.conversation_response_handler import ConversationResponseHandler
+from backend.server.handlers.conversation_request_handler import ConversationRequestHandler
+from backend.server.handlers.get_conversations_handler import GetConversationsHandler
+from backend.server.handlers.get_users_handler import GetUsersHandler
 
-from handlers.send_message_handler import SendMessageHandler
-from handlers.authentication_handler import AuthenticationHandler
-from handlers.sign_up_handler import SignUpHandler
-from handlers.sign_in_handler import SignInHandler
-from handlers.get_messages_handler import GetMessagesHandler
-from handlers.conversation_response_handler import ConversationResponseHandler
-from handlers.conversation_request_handler import ConversationRequestHandler
-from handlers.get_conversations_handler import GetConversationsHandler
-from handlers.get_users_handler import GetUsersHandler
-
-from authenticated_websocket import AuthenticatedWebSocket
+from backend.server.authenticated_websocket import AuthenticatedWebSocket
 
 
 # ================================================================
