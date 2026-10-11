@@ -2,7 +2,7 @@ from typing import Any
 import asyncpg
 from aiohttp import web
 
-from ..authenticated_websocket import AuthenticatedWebSocket
+from authenticated_websocket import AuthenticatedWebSocket
 
 
 class GetConversationsHandler:
