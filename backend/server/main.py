@@ -1,12 +1,19 @@
 import os
+import sys
 import json
 import asyncio
+from pathlib import Path
 from functools import partial
 from typing import Any, Callable, Awaitable
 
 import asyncpg
 from aiohttp import web
 from argon2 import PasswordHasher
+
+# Adiciona o diretório 'backend/server' ao caminho de módulos do Python
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 from handlers.send_message_handler import SendMessageHandler
 from handlers.authentication_handler import AuthenticationHandler
