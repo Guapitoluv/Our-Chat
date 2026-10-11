@@ -72,7 +72,6 @@ class SignInHandler:
                 )
 
                 # Define o usuário na conexão atual e registra em conexões ativas
-                ws.set_authenticated(True)
                 ws.set_user_id(user_id)
                 app['active_connections'][user_id] = ws
 
