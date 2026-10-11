@@ -56,6 +56,7 @@ async def initialize_database(app):
                 conversation_id TEXT NOT NULL REFERENCES conversations(id),
                 sender_id TEXT NOT NULL REFERENCES users(id),
                 ciphertext TEXT NOT NULL,
+                sender_ciphertext TEXT,
                 iv TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
@@ -133,14 +134,14 @@ async def websocket_handler(request):
                         await handle_get_users(request.app['db_pool'], ws, request_id)
                     elif message_type == "get_conversations":
                         await handle_get_conversations(request.app, ws, request_id)
+                    elif message_type == "get_messages":
+                        await handle_get_messages(request.app, ws, request_id, payload)
                     elif message_type == "conversation_request":
                         await handle_conversation_request(request.app, ws, request_id, payload)
                     elif message_type == "conversation_response":
                         await handle_conversation_response(request.app, ws, request_id, payload)
                     elif message_type == "send_message":
                         await handle_send_message(request.app, ws, request_id, payload)
-                    elif message_type == "get_messages":
-                        await handle_get_messages(request.app, ws, request_id, payload)
                     else:
                         await send_error(ws, request_id, "Tipo de mensagem desconhecido.")
 
@@ -257,7 +258,6 @@ async def handle_get_users(db_pool, ws, request_id):
 
 
 async def handle_get_conversations(app, ws, request_id):
-    """Retorna todas as conversas das quais o usuário conectado faz parte."""
     if not ws.user_id:
         await send_error(ws, request_id, "Não autenticado.")
         return
@@ -291,6 +291,61 @@ async def handle_get_conversations(app, ws, request_id):
     })
 
 
+async def handle_get_messages(app, ws, request_id, payload):
+    if not ws.user_id:
+        await send_error(ws, request_id, "Não autenticado.")
+        return
+
+    conversation_id = payload.get("conversationId")
+    if not conversation_id:
+        await send_error(ws, request_id, "conversationId é obrigatório.")
+        return
+
+    async with app['db_pool'].acquire() as conn:
+        conv = await conn.fetchrow(
+            """
+            SELECT id FROM conversations 
+            WHERE id = $1 AND (requester_id = $2 OR recipient_id = $2)
+            """,
+            conversation_id, ws.user_id
+        )
+
+        if not conv:
+            await send_error(ws, request_id, "Conversa não encontrada ou não autorizada.")
+            return
+
+        rows = await conn.fetch(
+            """
+            SELECT id, conversation_id, sender_id, ciphertext, sender_ciphertext, iv, created_at
+            FROM messages
+            WHERE conversation_id = $1
+            ORDER BY created_at ASC
+            """,
+            conversation_id
+        )
+
+        messages = []
+        for r in rows:
+            messages.append({
+                "id": r["id"],
+                "conversationId": r["conversation_id"],
+                "senderId": r["sender_id"],
+                "ciphertext": r["ciphertext"],
+                "senderCiphertext": r["sender_ciphertext"],
+                "iv": r["iv"],
+                "createdAt": r["created_at"].isoformat() if r["created_at"] else None
+            })
+
+    await ws.send_json({
+        "type": "get_messages_success",
+        "requestId": request_id,
+        "payload": {
+            "conversationId": conversation_id,
+            "messages": messages
+        }
+    })
+
+
 async def handle_conversation_request(app, ws, request_id, payload):
     if not ws.user_id:
         await send_error(ws, request_id, "Não autenticado.")
@@ -302,7 +357,6 @@ async def handle_conversation_request(app, ws, request_id, payload):
         return
 
     async with app['db_pool'].acquire() as conn:
-        # BUSCA BI-DIRECIONAL: Checa se A -> B ou B -> A já existe
         existing_conv = await conn.fetchrow(
             """
             SELECT id, requester_id, recipient_id, status FROM conversations 
@@ -328,7 +382,6 @@ async def handle_conversation_request(app, ws, request_id, payload):
                 conversation_id, ws.user_id, recipient_id, conv_status
             )
 
-    # Responde para quem pediu
     await ws.send_json({
         "type": "conversation_request_sent",
         "requestId": request_id,
@@ -339,7 +392,6 @@ async def handle_conversation_request(app, ws, request_id, payload):
         }
     })
 
-    # Notifica o destinatário em tempo real se for uma nova solicitação pendente
     if conv_status == "pending" and requester_id == ws.user_id:
         recipient_ws = app['active_connections'].get(recipient_id)
         if recipient_ws:
@@ -384,7 +436,6 @@ async def handle_conversation_response(app, ws, request_id, payload):
         "payload": {"conversationId": conversation_id, "accepted": accepted}
     })
 
-    # Notifica a outra ponta sobre o aceite/recusa
     other_ws = app['active_connections'].get(other_user_id)
     if other_ws:
         await other_ws.send_json({
@@ -404,9 +455,9 @@ async def handle_send_message(app, ws, request_id, payload):
 
     conversation_id = payload.get("conversationId")
 
-    # Trata o payload se o ciphertext vier na raiz ou aninhado em 'message'
     message_data = payload.get("message") or {}
     ciphertext = payload.get("ciphertext") or message_data.get("ciphertext")
+    sender_ciphertext = payload.get("senderCiphertext") or message_data.get("senderCiphertext")
     iv = payload.get("iv") or message_data.get("iv")
 
     if not conversation_id or not ciphertext:
@@ -429,22 +480,20 @@ async def handle_send_message(app, ws, request_id, payload):
         message_id = str(uuid.uuid4())
         await conn.execute(
             """
-            INSERT INTO messages (id, conversation_id, sender_id, ciphertext, iv)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO messages (id, conversation_id, sender_id, ciphertext, sender_ciphertext, iv)
+            VALUES ($1, $2, $3, $4, $5, $6)
             """,
-            message_id, conversation_id, ws.user_id, ciphertext, iv
+            message_id, conversation_id, ws.user_id, ciphertext, sender_ciphertext, iv
         )
 
         target_id = conv["recipient_id"] if conv["requester_id"] == ws.user_id else conv["requester_id"]
 
-    # Confirmação para quem enviou
     await ws.send_json({
         "type": "send_message_success",
         "requestId": request_id,
         "payload": {"messageId": message_id, "conversationId": conversation_id}
     })
 
-    # Transmite para o destinatário em tempo real
     target_ws = app['active_connections'].get(target_id)
     if target_ws:
         await target_ws.send_json({
@@ -457,62 +506,6 @@ async def handle_send_message(app, ws, request_id, payload):
                 "iv": iv
             }
         })
-
-
-async def handle_get_messages(app, ws, request_id, payload):
-    if not ws.user_id:
-        await send_error(ws, request_id, "Não autenticado.")
-        return
-
-    conversation_id = payload.get("conversationId")
-    if not conversation_id:
-        await send_error(ws, request_id, "conversationId é obrigatório.")
-        return
-
-    async with app['db_pool'].acquire() as conn:
-        # 1. Valida se o usuário logado faz parte dessa conversa
-        conv = await conn.fetchrow(
-            """
-            SELECT id FROM conversations 
-            WHERE id = $1 AND (requester_id = $2 OR recipient_id = $2)
-            """,
-            conversation_id, ws.user_id
-        )
-
-        if not conv:
-            await send_error(ws, request_id, "Conversa não encontrada ou não autorizada.")
-            return
-
-        # 2. Busca todas as mensagens da conversa ordenadas por data
-        rows = await conn.fetch(
-            """
-            SELECT id, conversation_id, sender_id, ciphertext, iv, created_at
-            FROM messages
-            WHERE conversation_id = $1
-            ORDER BY created_at ASC
-            """,
-            conversation_id
-        )
-
-        messages = []
-        for r in rows:
-            messages.append({
-                "id": r["id"],
-                "conversationId": r["conversation_id"],
-                "senderId": r["sender_id"],
-                "ciphertext": r["ciphertext"],
-                "iv": r["iv"],
-                "createdAt": r["created_at"].isoformat() if r["created_at"] else None
-            })
-
-    await ws.send_json({
-        "type": "get_messages_success",
-        "requestId": request_id,
-        "payload": {
-            "conversationId": conversation_id,
-            "messages": messages
-        }
-    })
 
 
 app = web.Application()
