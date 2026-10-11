@@ -31,7 +31,6 @@ class AuthenticationHandler:
             user_id: str = decoded["user_id"]
 
             # Atualiza o estado da conexão WebSocket
-            ws.set_authenticated(True)
             ws.set_user_id(user_id)
 
             # Gerencia conexões ativas na aplicação
