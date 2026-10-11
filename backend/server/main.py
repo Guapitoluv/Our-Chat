@@ -2,6 +2,7 @@ import json
 import os
 import re
 import uuid
+from typing import Any, Callable, Awaitable
 
 import asyncpg
 from aiohttp import web
@@ -9,6 +10,35 @@ from argon2 import PasswordHasher
 from argon2.exceptions import HashingError
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
+
+from handlers.send_message_handler import SendMessageHandler
+from handlers.authentication_handler import AuthenticationHandler
+from handlers.sign_up_handler import SignUpHandler
+from handlers.sign_in_handler import SignInHandler
+from handlers.get_messages_handler import GetMessagesHandler
+from handlers.conversation_response_handler import ConversationResponseHandler
+from handlers.conversation_request_handler import ConversationRequestHandler
+from handlers.get_conversations_handler import GetConversationsHandler
+from handlers.get_users_handler import GetUsersHandler
+
+from authenticated_websocket import AuthenticatedWebSocket
+from initialize_db import initialize_database
+
+# ================================================================
+# INSTÂNCIAS DOS HANDLERS
+# ================================================================
+
+send_message_handler: SendMessageHandler = SendMessageHandler()
+authentication_handler: AuthenticationHandler = AuthenticationHandler()
+sign_up_handler: SignUpHandler = SignUpHandler()
+sign_in_handler: SignInHandler = SignInHandler()
+get_messages_handler: GetMessagesHandler = GetMessagesHandler()
+conversation_response_handler: ConversationResponseHandler = ConversationResponseHandler()
+conversation_request_handler: ConversationRequestHandler = ConversationRequestHandler()
+get_conversations_handler: GetConversationsHandler = GetConversationsHandler()
+get_users_handler: GetUsersHandler = GetUsersHandler()
+
+DATABASE_URL: str | None = os.environ.get("DATABASE_URL")
 
 if not DATABASE_URL:
     raise ValueError("A variável de ambiente DATABASE_URL não foi definida!")
@@ -26,6 +56,17 @@ async def initialize_database(app):
         max_size=5,
         statement_cache_size=0
     )
+password_hasher: PasswordHasher = PasswordHasher()
+
+
+# ================================================================
+# CICLO DE VIDA DO BANCO DE DADOS
+# ================================================================
+
+async def cleanup_database(app: web.Application) -> None:
+    if 'db_pool' in app:
+        pool: asyncpg.Pool = app['db_pool']
+        await pool.close()
 
     app['active_connections'] = {}  # Mapeia user_id -> WebSocketResponse
 
@@ -107,6 +148,46 @@ async def websocket_handler(request):
     ws.user_id = None
     active_connections = request.app['active_connections']
 
+# ================================================================
+# DISPATCHER
+# ================================================================
+
+async def dispatch_message(
+    app: web.Application, 
+    ws: AuthenticatedWebSocket, 
+    request_id: str, 
+    message_type: str, 
+    payload: dict[str, Any]
+) -> None:
+    # Mapeamento direto de tipos de mensagem para métodos
+    handlers: dict[str, Callable[[web.Application, AuthenticatedWebSocket, str, dict[str, Any]], Awaitable[None]]] = {
+        "authenticate": authentication_handler.handle_authenticate,
+        "sign_up": sign_up_handler.handle_sign_up,
+        "sign_in": sign_in_handler.handle_sign_in,
+        "get_users": get_users_handler.handle_get_users,
+        "get_conversations": get_conversations_handler.handle_get_conversations,
+        "get_messages": get_messages_handler.handle_get_messages,
+        "conversation_request": conversation_request_handler.handle_conversation_request,
+        "conversation_response": conversation_response_handler.handle_conversation_response,
+        "send_message": send_message_handler.handle_send_message,
+    }
+
+    handler = handlers.get(message_type)
+    
+    if handler:
+        await handler(app, ws, request_id, payload)
+    else:
+        await ws.send_error(request_id, "Tipo de mensagem desconhecido.")
+
+# ================================================================
+# HANDLER WEBSOCKET PRINCIPAL
+# ================================================================
+
+async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
+    ws = AuthenticatedWebSocket(heartbeat=30)
+    await ws.prepare(request)
+
+    active_connections: dict[str, AuthenticatedWebSocket] = request.app['active_connections']
     print("Cliente conectado via WebSocket.")
 
     try:
@@ -147,6 +228,21 @@ async def websocket_handler(request):
 
                 except (json.JSONDecodeError, ValueError, TypeError) as e:
                     await send_error(ws, None, f"Mensagem inválida: {str(e)}")
+                    data: Any = json.loads(message.data)
+                    if not isinstance(data, dict):
+                        raise ValueError("Formato inválido.")
+
+                    message_type: Any = data.get("type")
+                    request_id: Any = data.get("requestId")
+                    payload: Any = data.get("payload", {})
+
+                    if not isinstance(request_id, str) or not isinstance(message_type, str):
+                        raise ValueError("Atributos obrigatórios inválidos.")
+
+                    await dispatch_message(request.app, ws, request_id, message_type, payload)
+
+                except (json.JSONDecodeError, ValueError, TypeError) as e:
+                    await ws.send_error(None, f"Mensagem inválida: {str(e)}")
 
             elif message.type == web.WSMsgType.ERROR:
                 print("Erro WebSocket:", ws.exception())
@@ -516,4 +612,25 @@ app.on_cleanup.append(cleanup_database)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))
+        user_id = ws.get_user_id()
+        if ws.is_authenticated and user_id and user_id in active_connections:
+            del active_connections[user_id]
+        
+        print(f"Cliente {user_id or 'não-autenticado'} desconectado.")
+    
+    return ws
+
+
+# ================================================================
+# APP SETUP
+# ================================================================
+
+app: web.Application = web.Application()
+app.router.add_get("/ws", websocket_handler)
+
+app.on_startup.append(initialize_database)
+app.on_cleanup.append(cleanup_database)
+
+if __name__ == "__main__":
+    port: int = int(os.environ.get("PORT", "8080"))
     web.run_app(app, host="0.0.0.0", port=port)

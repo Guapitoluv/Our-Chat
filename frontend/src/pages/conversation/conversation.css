@@ -6,12 +6,11 @@
  * #1A7473 (dark cyan) (c:white)
  */
 
-
 .conversation-page {
   box-sizing: border-box;
 
   background-color: #7ECAAB;
-  font-family: "Silkscreen";
+  font-family: "Silkscreen", monospace;
 
   display: flex;
   flex-direction: column;
@@ -25,13 +24,11 @@
   overflow: hidden;
 }
 
-
 .conversation-page *,
 .conversation-page *::before,
 .conversation-page *::after {
   box-sizing: border-box;
 }
-
 
 /* ============================================================
  * HEADER
@@ -39,111 +36,184 @@
 
 .conversation-header {
   width: 100%;
-
   background-color: #1A7473;
-
   min-height: 50px;
 
   display: flex;
   align-items: center;
+  justify-content: space-between;
 
-  padding: 5px;
-
+  padding: 5px 15px;
   flex-shrink: 0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
-
 
 .conversation-header .button {
   background-color: transparent;
-
   border: none;
-
   color: white;
-
   font-family: inherit;
   font-size: 1.5em;
-
   cursor: pointer;
-
   text-decoration: none;
+  line-height: 1;
 }
-
 
 .conversation-header h1 {
-  margin: 0 auto;
-
+  margin: 0;
   color: white;
-
-  font-size: 1em;
+  font-size: 1.1em;
+  text-align: center;
+  flex: 1;
 }
 
+/* ============================================================
+ * ESTRUTURA PRINCIPAL (BODY)
+ * ============================================================ */
+
+.conversation-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
 
 /* ============================================================
- * MESSAGES
+ * BARRA LATERAL DE CONTATOS
  * ============================================================ */
+
+.contacts-sidebar {
+  width: 260px;
+  min-width: 200px;
+  background-color: #77A559;
+  border-right: 3px solid #1A7473;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-title {
+  padding: 10px;
+  background-color: #4F8043;
+  color: white;
+  font-size: 0.9em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.contacts-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.contacts-list .loading-contacts,
+.contacts-list .empty-contacts {
+  padding: 15px;
+  text-align: center;
+  color: black;
+  font-size: 0.8em;
+}
+
+.contact-item {
+  padding: 10px;
+  margin-bottom: 6px;
+  background-color: white;
+  color: black;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  font-size: 0.85em;
+  
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.contact-item:hover {
+  background-color: #7ECAAB;
+}
+
+.contact-item:active {
+  transform: scale(0.95);
+}
+
+.contact-item.active {
+  background-color: #1A7473;
+  color: white;
+  border-color: white;
+}
+
+/* ============================================================
+ * PAINEL DE CHAT
+ * ============================================================ */
+
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 
 #messages {
   flex: 1;
-
   min-height: 0;
 
   display: flex;
   flex-direction: column;
-
-  gap: 5px;
+  gap: 8px;
 
   overflow-y: auto;
-
   padding: 10px;
 }
 
+.empty-chat-placeholder {
+  margin: auto;
+  text-align: center;
+  color: #1A7473;
+  font-size: 0.9em;
+  max-width: 80%;
+}
 
 .message {
   width: fit-content;
   max-width: 80%;
 
   padding: 8px 10px;
-
   border-radius: 10px;
 
   overflow-wrap: anywhere;
   word-break: break-word;
 
   user-select: none;
-
   transition: transform 0.5s;
 }
-
 
 .message:active {
   transform: scale(0.75);
 }
 
-
 .message p {
   margin: 0;
 }
 
-
 .message--received {
   align-self: flex-start;
-
   border-radius: 10px 10px 10px 0;
-
   background-color: white;
   color: black;
 }
 
-
 .message--sent {
   align-self: flex-end;
-
   border-radius: 10px 10px 0 10px;
-
   background-color: #1A7473;
   color: white;
 }
-
 
 /* ============================================================
  * MESSAGE FORM
@@ -155,13 +225,13 @@
 
   gap: 10px;
 
-  padding: 5px;
+  padding: 8px;
 
   background-color: #7ECAAB;
+  border-top: 2px solid #1A7473;
 
   flex-shrink: 0;
 }
-
 
 #message-input {
   min-width: 0;
@@ -180,16 +250,19 @@
   padding: 10px;
 
   font-family: inherit;
-  font-size: 1.2em;
+  font-size: 1.1em;
 
   overflow-y: auto;
 }
-
 
 #message-input:focus {
   outline: 2px solid #1A7473;
 }
 
+#message-input:disabled {
+  background-color: #a3d9c5;
+  cursor: not-allowed;
+}
 
 #send-button {
   flex: 0 0 40px;
@@ -204,6 +277,28 @@
   color: white;
 
   font-family: inherit;
+  font-size: 1.2em;
 
   cursor: pointer;
+}
+
+#send-button:disabled {
+  background-color: #4F8043;
+  border-color: #77A559;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* RESPONSIVIDADE MOBILE */
+@media (max-width: 600px) {
+  .conversation-body {
+    flex-direction: column;
+  }
+
+  .contacts-sidebar {
+    width: 100%;
+    height: 130px;
+    border-right: none;
+    border-bottom: 3px solid #1A7473;
+  }
 }

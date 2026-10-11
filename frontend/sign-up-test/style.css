@@ -1,0 +1,86 @@
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  background: #7ECAAB;
+  color: #172421;
+  font-family: system-ui, sans-serif;
+}
+
+.register-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 28px;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 28px #00000018;
+}
+
+h1 {
+  margin: 0;
+  color: #1A7473;
+}
+
+.register-card > p {
+  margin-bottom: 24px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+label {
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #a8b8b1;
+  border-radius: 8px;
+  font: inherit;
+}
+
+input:focus {
+  outline: 2px solid #1A7473;
+  outline-offset: 2px;
+}
+
+button {
+  margin-top: 12px;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #1A7473;
+  color: white;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.help {
+  margin: 0;
+  color: #52615b;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+#status {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}

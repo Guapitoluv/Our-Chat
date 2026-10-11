@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard do Servidor - OurChat</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-color: #38bdf8;
+      --accent-hover: #0284c7;
+      --danger-color: #f87171;
+      --success-color: #4ade80;
+      --border-color: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1rem;
+    }
+
+    .status-badge {
+      padding: 0.4rem 0.8rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-badge.connected {
+      background-color: rgba(74, 222, 128, 0.1);
+      color: var(--success-color);
+      border: 1px solid var(--success-color);
+    }
+
+    .status-badge.disconnected {
+      background-color: rgba(248, 113, 113, 0.1);
+      color: var(--danger-color);
+      border: 1px solid var(--danger-color);
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .grid-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card h2 {
+      font-size: 1.25rem;
+      color: var(--accent-color);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    input {
+      background-color: var(--bg-color);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--accent-color);
+    }
+
+    button {
+      background-color: var(--accent-color);
+      color: #000;
+      border: none;
+      padding: 0.75rem;
+      border-radius: 0.25rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--accent-color);
+      border: 1px solid var(--accent-color);
+    }
+
+    .btn-secondary:hover {
+      background-color: rgba(56, 189, 248, 0.1);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .mono {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .log-box {
+      background-color: var(--bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 0.25rem;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      height: 180px;
+      overflow-y: auto;
+      color: var(--text-muted);
+    }
+
+    .log-entry {
+      margin-bottom: 0.25rem;
+    }
+
+    .log-entry.error { color: var(--danger-color); }
+    .log-entry.success { color: var(--success-color); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>OurChat Server - Painel do SQLite</h1>
+    <div id="statusBadge" class="status-badge disconnected">
+      ● Desconectado
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="form-group">
+      <label for="serverUrl">URL Base do Servidor (HTTP e WebSocket):</label>
+      <div style="display: flex; gap: 0.5rem;">
+        <input type="text" id="serverHost" value="http://localhost:8080" style="flex: 1;" placeholder="http://localhost:8080">
+        <button id="btnConnect" onclick="toggleConnection()">Conectar WS</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-container">
+    <!-- Formulário de Teste de Cadastro -->
+    <div class="card">
+      <h2>Testar Cadastro (`sign_up`)</h2>
+      <form id="signUpForm" onsubmit="handleSignUp(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="form-group">
+          <label for="name">Nome:</label>
+          <input type="text" id="name" required placeholder="Ex: Maria Silva">
+        </div>
+        <div class="form-group">
+          <label for="email">E-mail:</label>
+          <input type="email" id="email" required placeholder="Ex: maria@exemplo.com">
+        </div>
+        <div class="form-group">
+          <label for="password">Senha:</label>
+          <input type="password" id="password" required placeholder="Mínimo 8 caracteres">
+        </div>
+        <button type="submit">Cadastrar via WS</button>
+      </form>
+    </div>
+
+    <!-- Tabela do Banco de Dados SQLite -->
+    <div class="card" style="grid-column: span 1;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Usuários no Banco (SQLite)</h2>
+        <div style="display: flex; gap: 0.5rem;">
+          <button onclick="fetchUsersHTTP()" class="btn-secondary" style="padding: 0.4rem 0.8rem;">Buscar (HTTP)</button>
+          <button onclick="fetchUsersWS()" class="btn-secondary" style="padding: 0.4rem 0.8rem;">Buscar (WS)</button>
+        </div>
+      </div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Criado em</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <tr>
+              <td colspan="4" style="text-align: center; color: var(--text-muted);">
+                Clique em "Buscar" para carregar os registros do banco.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Box de Logs WebSocket -->
+  <div class="card">
+    <h2>Logs de Rede e WebSocket</h2>
+    <div id="logBox" class="log-box"></div>
+  </div>
+
+  <script>
+    let ws = null;
+
+    const createMockPublicKey = () => ({
+      kty: "EC",
+      crv: "P-256",
+      x: "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8T11",
+      y: "x_dae37PFF315S5j8_pZ45m8391S382J_d"
+    });
+
+    const createMockEncryptedBackup = () => ({
+      version: 1,
+      iterations: 100000,
+      salt: "a1b2c3d4e5",
+      iv: "f6e5d4c3b2",
+      ciphertext: "4a8b1c2d3e4f5a6b7c8d9e0f"
+    });
+
+    function getWsUrl() {
+      const baseUrl = document.getElementById("serverHost").value.trim().replace(/\/$/, "");
+      return baseUrl.replace(/^http/, "ws") + "/ws";
+    }
+
+    function toggleConnection() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.close();
+      } else {
+        connect();
+      }
+    }
+
+    function connect() {
+      const url = getWsUrl();
+      addLog(`Conectando WebSocket em: ${url}...`);
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        updateStatus(true);
+        addLog("Conexão WebSocket ativa!", "success");
+        fetchUsersWS(); // Busca usuários ao conectar
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          addLog(`[RECEBIDO] ${JSON.stringify(data)}`);
+
+          if (data.type === "sign_up_success") {
+            addLog(`Cadastro realizado! ID: ${data.payload.userId}`, "success");
+            fetchUsersWS(); // Atualiza a tabela
+          } else if (data.type === "get_users_success") {
+            renderUsersTable(data.payload.users);
+          } else if (data.type === "error") {
+            addLog(`Erro: ${data.payload.message}`, "error");
+          }
+        } catch (e) {
+          addLog(`Erro ao ler resposta: ${event.data}`, "error");
+        }
+      };
+
+      ws.onerror = () => addLog("Erro no WebSocket.", "error");
+      ws.onclose = () => {
+        updateStatus(false);
+        addLog("WebSocket desconectado.");
+      };
+    }
+
+    function handleSignUp(event) {
+      event.preventDefault();
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert("Conecte-se ao WebSocket antes de cadastrar!");
+        return;
+      }
+
+      const payload = {
+        type: "sign_up",
+        requestId: crypto.randomUUID(),
+        payload: {
+          name: document.getElementById("name").value,
+          email: document.getElementById("email").value,
+          password: document.getElementById("password").value,
+          publicKey: createMockPublicKey(),
+          encryptedBackup: createMockEncryptedBackup()
+        }
+      };
+
+      ws.send(JSON.stringify(payload));
+      addLog(`[ENVIADO sign_up] ${payload.payload.email}`);
+      document.getElementById("signUpForm").reset();
+    }
+
+    // Busca via HTTP GET /api/users
+    async function fetchUsersHTTP() {
+      const baseUrl = document.getElementById("serverHost").value.trim().replace(/\/$/, "");
+      try {
+        addLog(`Buscando via HTTP GET ${baseUrl}/api/users...`);
+        const res = await fetch(`${baseUrl}/api/users`);
+        const data = await res.json();
+        if (data.users) {
+          renderUsersTable(data.users);
+          addLog(`${data.users.length} usuários retornados via HTTP.`, "success");
+        }
+      } catch (err) {
+        addLog(`Erro na busca HTTP: ${err.message}`, "error");
+      }
+    }
+
+    // Busca via WebSocket get_users
+    function fetchUsersWS() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        fetchUsersHTTP(); // Fallback se o WS não estiver conectado
+        return;
+      }
+
+      const payload = {
+        type: "get_users",
+        requestId: crypto.randomUUID()
+      };
+
+      ws.send(JSON.stringify(payload));
+      addLog(`[ENVIADO get_users] Solicitando lista do SQLite...`);
+    }
+
+    function renderUsersTable(users) {
+      const tbody = document.getElementById("usersTableBody");
+      tbody.innerHTML = "";
+
+      if (!users || users.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhum usuário cadastrado no banco.</td></tr>`;
+        return;
+      }
+
+      users.forEach(u => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">${u.id.substring(0, 8)}...</td>
+          <td><strong>${escapeHtml(u.name)}</strong></td>
+          <td>${escapeHtml(u.email)}</td>
+          <td class="mono">${u.created_at || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateStatus(isConnected) {
+      const badge = document.getElementById("statusBadge");
+      const btn = document.getElementById("btnConnect");
+      badge.className = `status-badge ${isConnected ? 'connected' : 'disconnected'}`;
+      badge.innerHTML = `● ${isConnected ? 'Conectado' : 'Desconectado'}`;
+      btn.innerText = isConnected ? "Desconectar" : "Conectar WS";
+    }
+
+    function addLog(text, type = "info") {
+      const logBox = document.getElementById("logBox");
+      const entry = document.createElement("div");
+      entry.className = `log-entry ${type}`;
+      entry.innerText = `[${new Date().toLocaleTimeString()}] ${text}`;
+      logBox.appendChild(entry);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, match => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[match]));
+    }
+  </script>
+</body>
+</html>

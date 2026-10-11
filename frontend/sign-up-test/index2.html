@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<!-- cd "/storage/emulated/0/Programs/HTML Projects/new-our-chat/our-chat/Our-chat" -->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Our-Chat — Cadastro</title>
+
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <main class="register-card">
+    <h1>Our-Chat</h1>
+    <p>Crie sua conta para começar.</p>
+
+    <form id="register-form">
+      <label for="name">Nome</label>
+      <input
+        id="name"
+        name="name"
+        type="text"
+        maxlength="80"
+        autocomplete="name"
+        required
+      >
+
+      <label for="email">E-mail</label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        maxlength="254"
+        autocomplete="email"
+        required
+      >
+
+      <label for="password">Senha da conta</label>
+      <input
+        id="password"
+        name="password"
+        type="password"
+        minlength="8"
+        maxlength="128"
+        autocomplete="new-password"
+        required
+      >
+
+      <label for="backup-password">
+        Senha de recuperação da chave
+      </label>
+      <input
+        id="backup-password"
+        name="backupPassword"
+        type="password"
+        minlength="12"
+        maxlength="128"
+        autocomplete="new-password"
+        required
+      >
+
+      <p class="help">
+        Guarde essa senha separadamente. Sem ela, poderá
+        não ser possível recuperar sua chave privada.
+      </p>
+
+      <button id="submit-button" type="submit">
+        Criar conta
+      </button>
+
+      <p id="status" role="status" aria-live="polite"></p>
+    </form>
+  </main>
+</body>
+</html>

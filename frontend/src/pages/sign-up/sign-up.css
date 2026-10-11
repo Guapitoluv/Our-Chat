@@ -1,2 +1,204 @@
+.sign-up-page {
+  --color001: #7ECAAB;
+  --color002: #1A7473;
+  --color003: white;
+  --color004: black;
+
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+
+  font-family: "Silkscreen", monospace, sans-serif;
+  color: #ffffff;
+}
+
+/* Container Centralizado Estilo Terminal/Pixel */
+.sign-up-container {
+  width: 100%;
+  max-width: 420px;
+  background-color: #000000;
+  border: 2px solid #404040;
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-sizing: border-box;
+  z-index: 10;
+}
+
+/* Cabeçalho do Formulário */
+.sign-up-header {
+  text-align: center;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #303030;
+  padding-bottom: 12px;
+}
+
+.sign-up-header .brand-title {
+  margin: 0;
+  font-size: 1.8em;
+  color: #ffffff;
+  letter-spacing: 1px;
+}
+
+.sign-up-header .subtitle {
+  margin: 6px 0 0 0;
+  font-size: 0.85em;
+  color: var(--color001, #7ECAAB);
+}
+
+/* Estrutura do Formulário */
+.sign-up-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.85em;
+  color: #aaaaaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Inputs Padronizados com o Tema */
+.sign-up-page .console-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 14px;
+
+  background-color: #151515;
+  color: #ffffff;
+
+  border: 2px solid #404040;
+  border-radius: 5px;
+  outline: none;
+
+  font-family: inherit;
+  font-size: 0.9em;
+
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sign-up-page .console-input:focus {
+  background-color: #202020;
+  border-color: var(--color001, #7ECAAB);
+}
+
+.sign-up-page .console-input::placeholder {
+  color: #666666;
+}
+
+/* Botão de Envio Retro */
+.btn-submit {
+  width: 100%;
+  padding: 12px;
+  margin-top: 8px;
+
+  font-family: inherit;
+  font-size: 0.95em;
+  font-weight: bold;
+  text-align: center;
+  text-transform: uppercase;
+
+  background-color: var(--color002, #1A7473);
+  color: #ffffff;
+
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s ease, background-color 0.2s ease;
+}
+
+.btn-submit:hover {
+  background-color: var(--color001, #7ECAAB);
+  color: #000000;
+}
+
+.btn-submit:active {
+  transform: scale(0.97);
+}
+
+.btn-submit:disabled {
+  background-color: #333333;
+  color: #777777;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Indicador de Conexão Retro */
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 4px 10px;
+  background-color: #111115;
+  border: 1px solid #303030;
+  border-radius: 20px;
+  font-size: 0.75em;
+  text-transform: uppercase;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #666666;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Estado Conectado (Online) */
+.connection-status.online {
+  border-color: #1A7473;
+}
+
+.connection-status.online .status-dot {
+  background-color: #7ECAAB;
+  box-shadow: 0 0 8px #7ECAAB;
+  animation: pulse-online 2s infinite;
+}
+
+.connection-status.online .status-text {
+  color: #7ECAAB;
+}
+
+/* Estado Desconectado (Offline) */
+.connection-status.offline {
+  border-color: #662222;
+}
+
+.connection-status.offline .status-dot {
+  background-color: #ff6b6b;
+  box-shadow: 0 0 6px #ff6b6b;
+}
+
+.connection-status.offline .status-text {
+  color: #ff6b6b;
+}
+
+@keyframes pulse-online {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
 
 
+/* Responsividade Mobile */
+@media (max-width: 480px) {
+  .sign-up-container {
+    padding: 18px;
+  }
+}

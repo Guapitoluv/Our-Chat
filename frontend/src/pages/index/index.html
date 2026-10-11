@@ -3,15 +3,69 @@
 
   <header class="home-header">
     <div class="topbar">
-      <p class="brand">Our Chat</p>
-
       <img
-        class="profile-image"
-        src="./public/images/default-profile.png"
-        alt="Perfil"
-        width="40"
-        height="40"
+        id="menu-image"
+        class="menu-image"
+        src="./public/images/menu.png"
+        alt="menu"
+        width="30"
+        height="30"
       >
+      
+      <p class="brand">Our Chat</p>
+      
+      <div id="connection-status" class="connection-status"> </div>
+      
+      <!-- Container do Perfil + Popover Flutuante -->
+      <div class="user-profile-flyout">
+        <button type="button" class="profile-trigger" id="profile-trigger-btn">
+          <img
+            id="profile-image"
+            class="profile-image"
+            src="./public/images/default-profile.png"
+            alt="Perfil"
+            width="40"
+            height="40"
+          >
+        </button>
+
+        <section 
+          class="profile-popover" 
+          id="profile-popover" 
+          role="dialog" 
+          aria-label="Perfil do usuário"
+          hidden
+        >
+          <header class="popover-header">
+            <img 
+              src="./public/images/default-profile.png" 
+              alt="" 
+              class="popover-avatar"
+            />
+            <div class="popover-user-info">
+              <h3 class="user-name" id="popover-user-name">Carregando...</h3>
+              <p class="user-email" id="popover-user-email">email@exemplo.com</p>
+            </div>
+          </header>
+      
+          <div class="popover-body">
+            <div class="info-badge">
+              <span class="badge-label">Função:</span>
+              <span class="badge-value" id="popover-user-role">Usuário</span>
+            </div>
+          </div>
+      
+          <footer class="popover-footer">
+            <button type="button" class="btn-action" id="btn-manage-account">
+              Gerenciar Conta
+            </button>
+            <button type="button" class="btn-danger" id="btn-logout">
+              Sair
+            </button>
+          </footer>
+        </section>
+      </div>
+
     </div>
     
     <h1>Bem-vindo ao Nosso Chat</h1>
@@ -19,9 +73,31 @@
 
   <main class="home-main">
     <section class="main-section">
+      
+      <input
+        id="console-input"
+        class="console-input"
+        type="text"
+        oninput="this.value = this.value.toLowerCase()"
+        autocapitalize="none"
+        placeholder="Digite um comando..."
+      >
+      
       <ul id="command-list" class="command-list empty"></ul>
       
-      <input id="console-input" class="console-input">
+
     </section>
+    
+    <section id="test"></section>
   </main>
+  
+  <section id="sidebar" class="sidebar">
+    <button id="close-sidebar">X</button>
+  </section>
+  
+  <div id="floating-menu" class="deactivated">
+    <button id="pin-command">Pin</button>
+    <button id="make-command-button">Create Button</button>
+    <button id="pull-command-to-sidebar">Save in Sidebar</button>
+  </div>
 </section>

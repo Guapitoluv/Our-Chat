@@ -1,0 +1,403 @@
+prompt:
+"Certo, vc pode repetir o que eu devo fazer em código para ter uma base funcional de criptografia e quando e como uso isso?"
+
+### 2\. `encoding.js` — converter bytes/Base64
+
+Os algoritmos criptográficos trabalham com bytes, enquanto mensagens WebSocket normalmente usam JSON. Esse módulo faz a conversão.
+
+```js
+export function toBase64(bytes) {
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary);
+}
+
+export function fromBase64(value) {
+  const binary = atob(value);
+
+  return Uint8Array.from(
+    binary,
+    character => character.charCodeAt(0)
+  );
+}
+```
+
+### 3\. `keys.js` — geração e importação das chaves
+
+Vamos usar ECDH P-256 para o acordo de chaves. A chave privada é exportável apenas porque precisamos criar o backup cifrado; depois de recuperada, será importada como não exportável.
+
+```js
+const ECDH = {
+  name: "ECDH",
+  namedCurve: "P-256"
+};
+
+export async function generateKeyPair() {
+  const pair = await crypto.subtle.generateKey(
+    ECDH,
+    true,
+    ["deriveKey"]
+  );
+
+  const publicKey = await crypto.subtle.exportKey(
+    "jwk",
+    pair.publicKey
+  );
+
+  const privateKey = await crypto.subtle.exportKey(
+    "jwk",
+    pair.privateKey
+  );
+
+  return { publicKey, privateKey };
+}
+
+export async function importPublicKey(jwk) {
+  return crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    ECDH,
+    true,
+    []
+  );
+}
+
+export async function importPrivateKey(jwk) {
+  return crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    ECDH,
+    false,
+    ["deriveKey"]
+  );
+}
+```
+
+### 4\. `backup.js` — proteger a chave privada
+
+O backup usa PBKDF2 para derivar uma chave AES-GCM a partir de uma senha e um salt aleatório. O IV também é aleatório. A senha não deve ser enviada ao servidor.
+
+```js
+import { toBase64, fromBase64 } from "./encoding.js";
+
+const ITERATIONS = 600_000;
+
+async function deriveBackupKey(password, salt) {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt,
+      iterations: ITERATIONS
+    },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+export async function encryptBackup(privateJwk, password) {
+  if (!password) {
+    throw new Error("Informe uma senha de backup.");
+  }
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveBackupKey(password, salt);
+
+  const plaintext = new TextEncoder().encode(
+    JSON.stringify(privateJwk)
+  );
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    plaintext
+  );
+
+  return {
+    version: 1,
+    iterations: ITERATIONS,
+    salt: toBase64(salt),
+    iv: toBase64(iv),
+    ciphertext: toBase64(new Uint8Array(ciphertext))
+  };
+}
+
+export async function decryptBackup(backup, password) {
+  if (
+    backup.version !== 1 ||
+    backup.iterations !== ITERATIONS
+  ) {
+    throw new Error("Formato de backup inválido.");
+  }
+
+  const key = await deriveBackupKey(
+    password,
+    fromBase64(backup.salt)
+  );
+
+  const plaintext = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: fromBase64(backup.iv)
+    },
+    key,
+    fromBase64(backup.ciphertext)
+  );
+
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
+```
+
+Se a senha estiver errada ou o backup tiver sido adulterado, a descriptografia deverá falhar. Em produção, valide também os tamanhos dos campos e limite rigorosamente os parâmetros recebidos antes de executar operações criptográficas.
+
+### 5\. `messages.js` — acordo de chaves e mensagens cifradas
+
+Cada usuário precisa da própria chave privada e da chave pública do destinatário. Com ECDH, os dois clientes conseguem derivar a mesma chave AES sem enviar essa chave ao servidor.
+
+```js
+import { fromBase64, toBase64 } from "./encoding.js";
+import { importPublicKey } from "./keys.js";
+
+export async function deriveConversationKey(
+  myPrivateKey,
+  theirPublicJwk
+) {
+  const theirPublicKey = await importPublicKey(
+    theirPublicJwk
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: "ECDH",
+      public: theirPublicKey
+    },
+    myPrivateKey,
+    {
+      name: "AES-GCM",
+      length: 256
+    },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+export async function encryptMessage(key, text) {
+  const iv = crypto.getRandomValues(
+    new Uint8Array(12)
+  );
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(text)
+  );
+
+  return {
+    version: 1,
+    iv: toBase64(iv),
+    ciphertext: toBase64(new Uint8Array(ciphertext))
+  };
+}
+
+export async function decryptMessage(key, packet) {
+  if (packet.version !== 1) {
+    throw new Error("Formato de mensagem não suportado.");
+  }
+
+  const plaintext = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: fromBase64(packet.iv)
+    },
+    key,
+    fromBase64(packet.ciphertext)
+  );
+
+  return new TextDecoder().decode(plaintext);
+}
+```
+
+Essa implementação deriva uma chave compartilhada para a conversa e a reutiliza nas mensagens, com um IV aleatório novo por mensagem. É adequada para demonstrar o fluxo, mas não tem rotação de chaves por mensagem, proteção contra comprometimento futuro nem autenticação das chaves públicas. Não a use como protocolo final de produção. Para isso, prefira uma implementação de protocolo de mensageria auditada, como as especificações do [Signal Protocol](https://signal.org/docs/).
+
+### 6\. Criar a identidade do usuário
+
+Agora crie `identity.js` na mesma pasta:
+
+```js
+import {
+  generateKeyPair,
+  importPrivateKey
+} from "./keys.js";
+
+import {
+  encryptBackup,
+  decryptBackup
+} from "./backup.js";
+
+export async function createIdentity(backupPassword) {
+  const pair = await generateKeyPair();
+
+  const encryptedBackup = await encryptBackup(
+    pair.privateKey,
+    backupPassword
+  );
+
+  const privateKey = await importPrivateKey(
+    pair.privateKey
+  );
+
+  return {
+    publicKey: pair.publicKey,
+    privateKey,
+    encryptedBackup
+  };
+}
+
+export async function restoreIdentity(
+  encryptedBackup,
+  backupPassword
+) {
+  const privateJwk = await decryptBackup(
+    encryptedBackup,
+    backupPassword
+  );
+
+  return importPrivateKey(privateJwk);
+}
+```
+
+### Quando chamar `createIdentity()`?
+
+Somente quando o usuário estiver criando uma identidade criptográfica pela primeira vez, normalmente durante o cadastro.
+
+```js
+const identity = await createIdentity(backupPassword);
+
+// Envie ao backend:
+const registrationPayload = {
+  name,
+  email,
+  password,
+  publicKey: identity.publicKey,
+  encryptedBackup: identity.encryptedBackup
+};
+
+// Mantenha identity.privateKey disponível para a sessão.
+```
+
+Não gere um novo par de chaves em cada login. Isso faria o usuário perder o acesso às conversas protegidas pela chave anterior, a menos que você implementasse um processo específico de rotação e recuperação.
+
+No login, recupere a identidade já existente. Se a chave privada não estiver disponível no dispositivo, baixe o backup cifrado e chame `restoreIdentity()` após o usuário fornecer a senha de recuperação.
+
+### 7\. Como testar a comunicação entre dois usuários
+
+Antes de conectar o servidor, você pode testar o fluxo no navegador com dois pares de chaves. Crie temporariamente um arquivo `test-crypto.js`:
+
+```js
+import { generateKeyPair, importPrivateKey } from "./keys.js";
+
+import {
+  deriveConversationKey,
+  encryptMessage,
+  decryptMessage
+} from "./messages.js";
+
+const alice = await generateKeyPair();
+const bob = await generateKeyPair();
+
+const alicePrivate = await importPrivateKey(
+  alice.privateKey
+);
+
+const bobPrivate = await importPrivateKey(
+  bob.privateKey
+);
+
+// Ambos derivam a mesma chave AES.
+const aliceKey = await deriveConversationKey(
+  alicePrivate,
+  bob.publicKey
+);
+
+const bobKey = await deriveConversationKey(
+  bobPrivate,
+  alice.publicKey
+);
+
+// Alice cifra uma mensagem.
+const packet = await encryptMessage(
+  aliceKey,
+  "Olá! Esta mensagem está cifrada."
+);
+
+// Simula o envio do pacote JSON pelo servidor.
+const receivedPacket = JSON.parse(
+  JSON.stringify(packet)
+);
+
+// Bob descriptografa a mensagem.
+const plaintext = await decryptMessage(
+  bobKey,
+  receivedPacket
+);
+
+console.log(plaintext);
+```
+
+Execute esse teste por uma página servida via HTTPS ou `localhost`, não diretamente por `file://`. Se tudo estiver correto, o resultado será:
+
+```text
+Olá! Esta mensagem está cifrada.
+```
+
+O servidor só precisa transportar `receivedPacket`; ele não possui a chave AES usada para descriptografar.
+
+### 8\. Como integrar ao WebSocket
+
+A mensagem enviada pelo cliente pode ter esta estrutura:
+
+```js
+const packet = await encryptMessage(
+  conversationKey,
+  "Olá, tudo bem?"
+);
+
+socket.send(JSON.stringify({
+  type: "send_message",
+  conversationId: "id-da-conversa",
+  payload: packet
+}));
+```
+
+O backend `aiohttp` deverá validar a sessão, verificar as permissões do remetente, armazenar o pacote cifrado e encaminhá-lo ao destinatário. Não deve tentar descriptografar `payload`.
+
+### 9\. O que ainda falta antes de usar em conversas reais
+
+* Autenticidade das chaves: verificar se a chave pública realmente pertence ao destinatário. Sem isso, um servidor malicioso pode tentar substituir as chaves.
+
+* Persistência local: salvar o backup e, se desejado, o objeto `CryptoKey` no IndexedDB, testando a recuperação no Chrome/Android e no Safari/iPhone.
+
+* Rotação e sessões: implementar um protocolo apropriado para trocar chaves, atualizar chaves de mensagem e tratar mensagens fora de ordem.
+
+* Mídias: cifrar imagens e vídeos no cliente antes de enviá-los ao armazenamento.
+
+* Recuperação: testar backup adulterado, senha incorreta, perda do dispositivo e troca de senha da conta.
+
+A Web Crypto API fornece as operações criptográficas, mas não resolve sozinha o desenho de um protocolo seguro. A própria documentação da MDN alerta que erros de gerenciamento de chaves podem comprometer toda a segurança.
+
+Próximo passo recomendado: implemente esses módulos e execute o teste entre Alice e Bob. Depois, integramos a criação e a recuperação da identidade ao seu formulário de cadastro e ao servidor `aiohttp`, sem misturar a chave privada com as mensagens enviadas ao backend.

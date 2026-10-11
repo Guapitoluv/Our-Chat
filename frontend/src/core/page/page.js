@@ -2,6 +2,7 @@ export class Page {
     constructor(htmlPath) {
         this.htmlPath = htmlPath;
         this.element = null;
+        this.context = null;
     }
 
 
@@ -45,10 +46,12 @@ export class Page {
     }
 
 
-    mount() {
+    mount(context) {
+        this.context = context;
     }
 
 
     unmount() {
+        this.context = null;
     }
 }

@@ -1,7 +1,7 @@
 <section class="conversation-page">
 
+  <!-- HEADER -->
   <header class="conversation-header">
-
     <a
       id="back-button"
       class="button"
@@ -10,38 +10,55 @@
       data-route
     >&lt;</a>
 
-    <h1>Conversation</h1>
-
-  </header>
-
-
-  <main id="messages">
-
-    <div class="message message--received">
-      <p>Hello</p>
-    </div>
-
-    <div class="message message--sent">
-      <p>Hi!</p>
-    </div>
-
-  </main>
-
-
-  <form id="message-form">
-
-    <textarea
-      id="message-input"
-      placeholder="Digite uma mensagem..."
-      rows="1"
-    ></textarea>
+    <h1 id="chat-title">Conversation</h1>
 
     <button
-      id="send-button"
-      type="submit"
-      aria-label="Enviar mensagem"
-    >&gt;</button>
+      id="refresh-contacts-btn"
+      class="button"
+      aria-label="Atualizar contatos"
+      title="Atualizar lista"
+    >🔄</button>
+  </header>
 
-  </form>
+  <!-- CORPO PRINCIPAL (CONTATOS + CHAT) -->
+  <div class="conversation-body">
+
+    <!-- BARRA LATERAL DE CONTATOS -->
+    <aside class="contacts-sidebar">
+      <div class="sidebar-title">Contatos</div>
+      <ul id="contacts-list" class="contacts-list">
+        <li class="loading-contacts">Carregando contatos...</li>
+      </ul>
+    </aside>
+
+    <!-- PAINEL DE CHAT -->
+    <main class="chat-panel">
+      
+      <!-- MENSAGENS -->
+      <div id="messages">
+        <div class="empty-chat-placeholder">
+          <p>Selecione um contato para iniciar a conversa cifrada.</p>
+        </div>
+      </div>
+
+      <!-- FORMULÁRIO -->
+      <form id="message-form">
+        <textarea
+          id="message-input"
+          placeholder="Digite uma mensagem..."
+          rows="1"
+          disabled
+        ></textarea>
+
+        <button
+          id="send-button"
+          type="submit"
+          aria-label="Enviar mensagem"
+          disabled
+        >&gt;</button>
+      </form>
+
+    </main>
+  </div>
 
 </section>
