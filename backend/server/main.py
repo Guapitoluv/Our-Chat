@@ -8,26 +8,26 @@ from aiohttp import web
 from argon2 import PasswordHasher
 from argon2.exceptions import HashingError
 
-# Pega a URL da variável de ambiente configurada no Render
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if not DATABASE_URL:
     raise ValueError("A variável de ambiente DATABASE_URL não foi definida!")
 
-
 password_hasher = PasswordHasher()
 
 
 async def initialize_database(app):
-    """Inicializa o pool de conexões com o Supabase e cria a tabela se necessário."""
+    """Inicializa o pool do banco de dados e cria tabelas se não existirem."""
     print("Conectando ao banco de dados Supabase...")
 
     app['db_pool'] = await asyncpg.create_pool(
         DATABASE_URL,
         min_size=1,
         max_size=5,
-        statement_cache_size=0  # Necessário para o Transaction Pooler do Supabase
+        statement_cache_size=0
     )
+
+    app['active_connections'] = {}  # Mapeia user_id -> WebSocketResponse
 
     async with app['db_pool'].acquire() as conn:
         await conn.execute("""
@@ -40,41 +40,46 @@ async def initialize_database(app):
                 encrypted_backup JSONB NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user',
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
+            );
+
+            CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                requester_id TEXT NOT NULL REFERENCES users(id),
+                recipient_id TEXT NOT NULL REFERENCES users(id),
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL REFERENCES conversations(id),
+                sender_id TEXT NOT NULL REFERENCES users(id),
+                ciphertext TEXT NOT NULL,
+                iv TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
         """)
-    print("Conexão estabelecida e tabela 'users' pronta!")
+    print("Tabelas prontas para uso!")
 
 
 async def cleanup_database(app):
-    """Fecha o pool de conexões ao encerrar o servidor."""
     if 'db_pool' in app:
         await app['db_pool'].close()
 
 
-async def health_check(request):
-    return web.json_response({
-        "status": "ok",
-        "service": "OurChat API (Supabase)"
-    })
-
-
 def format_user_row(row):
-    """Helper para formatar registros de usuário do banco para JSON seguro."""
     user = dict(row)
     if user.get("created_at"):
         user["created_at"] = user["created_at"].isoformat()
-
-    # Se public_key ou encrypted_backup vierem como string JSON, faz a conversão
     if isinstance(user.get("public_key"), str):
         user["public_key"] = json.loads(user["public_key"])
     if isinstance(user.get("encrypted_backup"), str):
         user["encrypted_backup"] = json.loads(user["encrypted_backup"])
-
     return user
 
 
 def format_user_payload(user_row):
-    """Retorna o objeto 'user' no formato padrão camelCase para as respostas do frontend."""
     user_data = format_user_row(user_row)
     return {
         "id": user_data["id"],
@@ -86,25 +91,20 @@ def format_user_payload(user_row):
     }
 
 
-async def get_users_http(request):
-    """Rota HTTP REST para listar usuários."""
-    db_pool = request.app['db_pool']
-    try:
-        async with db_pool.acquire() as conn:
-            rows = await conn.fetch("""
-                SELECT id, name, email, public_key, role, created_at 
-                FROM users 
-                ORDER BY created_at DESC
-            """)
-            users = [format_user_payload(r) for r in rows]
-            return web.json_response({"users": users})
-    except Exception as e:
-        return web.json_response({"error": str(e)}, status=500)
+async def send_error(ws, request_id, message):
+    await ws.send_json({
+        "type": "error",
+        "requestId": request_id,
+        "payload": {"message": message}
+    })
 
 
 async def websocket_handler(request):
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
+    
+    ws.user_id = None
+    active_connections = request.app['active_connections']
 
     print("Cliente conectado via WebSocket.")
 
@@ -124,139 +124,84 @@ async def websocket_handler(request):
                         raise ValueError("requestId inválido.")
 
                     if message_type == "sign_up":
-                        await handle_sign_up(request.app['db_pool'], ws, request_id, payload)
+                        await handle_sign_up(request.app, ws, request_id, payload)
                     elif message_type == "sign_in":
-                        await handle_sign_in(request.app['db_pool'], ws, request_id, payload)
+                        await handle_sign_in(request.app, ws, request_id, payload)
                     elif message_type == "get_users":
                         await handle_get_users(request.app['db_pool'], ws, request_id)
+                    elif message_type == "conversation_request":
+                        await handle_conversation_request(request.app, ws, request_id, payload)
+                    elif message_type == "conversation_response":
+                        await handle_conversation_response(request.app, ws, request_id, payload)
+                    elif message_type == "send_message":
+                        await handle_send_message(request.app, ws, request_id, payload)
                     else:
                         await send_error(ws, request_id, "Tipo de mensagem desconhecido.")
 
-                except (json.JSONDecodeError, ValueError, TypeError):
-                    await send_error(ws, None, "Mensagem inválida.")
+                except (json.JSONDecodeError, ValueError, TypeError) as e:
+                    await send_error(ws, None, f"Mensagem inválida: {str(e)}")
 
             elif message.type == web.WSMsgType.ERROR:
                 print("Erro WebSocket:", ws.exception())
 
     finally:
-        print("Cliente desconectado.")
+        if ws.user_id and ws.user_id in active_connections:
+            del active_connections[ws.user_id]
+        print(f"Cliente {ws.user_id or ''} desconectado.")
 
     return ws
 
 
-async def handle_get_users(db_pool, ws, request_id):
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT id, name, email, public_key, role, created_at 
-            FROM users 
-            ORDER BY created_at DESC
-        """)
-        users = [format_user_payload(r) for r in rows]
-
-    await ws.send_json({
-        "type": "get_users_success",
-        "requestId": request_id,
-        "payload": {"users": users}
-    })
-
-
-async def handle_sign_up(db_pool, ws, request_id, payload):
+async def handle_sign_up(app, ws, request_id, payload):
     name = payload.get("name")
     email = payload.get("email")
     password = payload.get("password")
     public_key = payload.get("publicKey")
     encrypted_backup = payload.get("encryptedBackup")
 
-    if not all([
-        isinstance(name, str),
-        isinstance(email, str),
-        isinstance(password, str),
-        isinstance(public_key, dict),
-        isinstance(encrypted_backup, dict)
-    ]):
-        await send_error(ws, request_id, "Preencha todos os campos corretamente.")
+    if not all([isinstance(name, str), isinstance(email, str), isinstance(password, str)]):
+        await send_error(ws, request_id, "Preencha todos os campos.")
         return
 
-    name = name.strip()
     email = email.strip().lower()
-
-    if not name or len(name) > 80:
-        await send_error(ws, request_id, "O nome deve ter entre 1 e 80 caracteres.")
-        return
-
-    if len(email) > 254 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-        await send_error(ws, request_id, "E-mail inválido.")
-        return
-
-    if len(password) < 8 or len(password) > 128:
-        await send_error(ws, request_id, "A senha deve ter entre 8 e 128 caracteres.")
-        return
-
-    try:
-        password_hash = password_hasher.hash(password)
-    except HashingError:
-        await send_error(ws, request_id, "Não foi possível processar a senha.")
-        return
-
+    password_hash = password_hasher.hash(password)
     user_id = str(uuid.uuid4())
 
     try:
-        async with db_pool.acquire() as conn:
+        async with app['db_pool'].acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO users (
-                    id, name, email, password_hash, public_key, encrypted_backup
-                ) VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO users (id, name, email, password_hash, public_key, encrypted_backup)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id, name, email, role, public_key, created_at
                 """,
-                user_id,
-                name,
-                email,
-                password_hash,
-                json.dumps(public_key),
-                json.dumps(encrypted_backup)
+                user_id, name.strip(), email, password_hash,
+                json.dumps(public_key), json.dumps(encrypted_backup)
             )
-
     except asyncpg.UniqueViolationError:
-        await send_error(ws, request_id, "Este e-mail já está cadastrado.")
+        await send_error(ws, request_id, "E-mail já cadastrado.")
         return
 
-    print(f"Cadastro criado no Supabase: {user_id}")
+    ws.user_id = user_id
+    app['active_connections'][user_id] = ws
 
     await ws.send_json({
         "type": "sign_up_success",
         "requestId": request_id,
-        "payload": {
-            "user": format_user_payload(row)
-        }
+        "payload": {"user": format_user_payload(row)}
     })
 
 
-async def handle_sign_in(db_pool, ws, request_id, payload):
-    email = payload.get("email")
-    password = payload.get("password")
+async def handle_sign_in(app, ws, request_id, payload):
+    email = payload.get("email", "").strip().lower()
+    password = payload.get("password", "")
 
-    if not isinstance(email, str) or not isinstance(password, str):
-        await send_error(ws, request_id, "Campos inválidos.")
-        return
-
-    email = email.strip().lower()
-
-    async with db_pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT id, name, email, password_hash, public_key, encrypted_backup, role, created_at 
-            FROM users 
-            WHERE email = $1
-            """,
-            email
-        )
-
+    async with app['db_pool'].acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
         if not row:
             await send_error(ws, request_id, "E-mail ou senha incorretos.")
             return
 
-        # Verifica a senha usando Argon2
         try:
             password_hasher.verify(row["password_hash"], password)
         except Exception:
@@ -264,6 +209,8 @@ async def handle_sign_in(db_pool, ws, request_id, payload):
             return
 
         user_data = format_user_row(row)
+        ws.user_id = user_data["id"]
+        app['active_connections'][ws.user_id] = ws
 
         await ws.send_json({
             "type": "sign_in_success",
@@ -275,23 +222,170 @@ async def handle_sign_in(db_pool, ws, request_id, payload):
         })
 
 
-async def send_error(ws, request_id, message):
+async def handle_get_users(db_pool, ws, request_id):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, name, email, public_key, role, created_at FROM users ORDER BY name ASC")
+        users = [format_user_payload(r) for r in rows]
+
     await ws.send_json({
-        "type": "error",
+        "type": "get_users_success",
         "requestId": request_id,
-        "payload": {"message": message}
+        "payload": {"users": users}
     })
 
 
-app = web.Application()
+async def handle_conversation_request(app, ws, request_id, payload):
+    if not ws.user_id:
+        await send_error(ws, request_id, "Não autenticado.")
+        return
 
-app.router.add_get("/", health_check)
-app.router.add_get("/api/users", get_users_http)
+    recipient_id = payload.get("recipientId")
+    if not recipient_id:
+        await send_error(ws, request_id, "recipientId obrigatório.")
+        return
+
+    conversation_id = str(uuid.uuid4())
+
+    async with app['db_pool'].acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO conversations (id, requester_id, recipient_id, status)
+            VALUES ($1, $2, $3, 'pending')
+            """,
+            conversation_id, ws.user_id, recipient_id
+        )
+
+    # Confirma para o solicitante
+    await ws.send_json({
+        "type": "conversation_request_sent",
+        "requestId": request_id,
+        "payload": {
+            "conversationId": conversation_id,
+            "status": "pending"
+        }
+    })
+
+    # Notifica o destinatário em tempo real se ele estiver logado
+    recipient_ws = app['active_connections'].get(recipient_id)
+    if recipient_ws:
+        await recipient_ws.send_json({
+            "type": "incoming_conversation_request",
+            "payload": {
+                "conversationId": conversation_id,
+                "requesterId": ws.user_id
+            }
+        })
+
+
+async def handle_conversation_response(app, ws, request_id, payload):
+    if not ws.user_id:
+        await send_error(ws, request_id, "Não autenticado.")
+        return
+
+    conversation_id = payload.get("conversationId")
+    accepted = bool(payload.get("accepted"))
+    status_str = "accepted" if accepted else "rejected"
+
+    async with app['db_pool'].acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE conversations 
+            SET status = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2 AND recipient_id = $3
+            RETURNING requester_id
+            """,
+            status_str, conversation_id, ws.user_id
+        )
+
+        if not row:
+            await send_error(ws, request_id, "Conversa não encontrada ou não autorizada.")
+            return
+
+        requester_id = row["requester_id"]
+
+    await ws.send_json({
+        "type": "conversation_response_success",
+        "requestId": request_id,
+        "payload": {"conversationId": conversation_id, "accepted": accepted}
+    })
+
+    # Notifica o solicitante sobre a decisão do destinatário
+    requester_ws = app['active_connections'].get(requester_id)
+    if requester_ws:
+        await requester_ws.send_json({
+            "type": "conversation_status_updated",
+            "payload": {
+                "conversationId": conversation_id,
+                "accepted": accepted,
+                "responderId": ws.user_id
+            }
+        })
+
+
+async def handle_send_message(app, ws, request_id, payload):
+    if not ws.user_id:
+        await send_error(ws, request_id, "Não autenticado.")
+        return
+
+    conversation_id = payload.get("conversationId")
+    ciphertext = payload.get("ciphertext")
+    iv = payload.get("iv")
+
+    if not conversation_id or not ciphertext:
+        await send_error(ws, request_id, "Dados de mensagem incompletos.")
+        return
+
+    async with app['db_pool'].acquire() as conn:
+        conv = await conn.fetchrow(
+            """
+            SELECT requester_id, recipient_id, status FROM conversations 
+            WHERE id = $1 AND (requester_id = $2 OR recipient_id = $2)
+            """,
+            conversation_id, ws.user_id
+        )
+
+        if not conv or conv["status"] != "accepted":
+            await send_error(ws, request_id, "Conversa inativa ou não autorizada.")
+            return
+
+        message_id = str(uuid.uuid4())
+        await conn.execute(
+            """
+            INSERT INTO messages (id, conversation_id, sender_id, ciphertext, iv)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            message_id, conversation_id, ws.user_id, ciphertext, iv
+        )
+
+        target_id = conv["recipient_id"] if conv["requester_id"] == ws.user_id else conv["requester_id"]
+
+    # Retorna o ACK para quem enviou
+    await ws.send_json({
+        "type": "send_message_success",
+        "requestId": request_id,
+        "payload": {"messageId": message_id, "conversationId": conversation_id}
+    })
+
+    # Transmite o pacote cifrado para o destinatário
+    target_ws = app['active_connections'].get(target_id)
+    if target_ws:
+        await target_ws.send_json({
+            "type": "new_message",
+            "payload": {
+                "messageId": message_id,
+                "conversationId": conversation_id,
+                "senderId": ws.user_id,
+                "ciphertext": ciphertext,
+                "iv": iv
+            }
+        })
+
+
+app = web.Application()
 app.router.add_get("/ws", websocket_handler)
 
 app.on_startup.append(initialize_database)
 app.on_cleanup.append(cleanup_database)
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))
