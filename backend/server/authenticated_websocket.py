@@ -1,3 +1,5 @@
+from aiohttp import web
+
 # Subclasse customizada para reconhecer a propriedade dinâmica 'user_id' nos Mypy/Linters
 class AuthenticatedWebSocket(web.WebSocketResponse):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
