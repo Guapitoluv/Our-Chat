@@ -102,7 +102,7 @@ async def send_error(ws, request_id, message):
 async def websocket_handler(request):
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
-    
+
     ws.user_id = None
     active_connections = request.app['active_connections']
 
@@ -123,7 +123,9 @@ async def websocket_handler(request):
                     if not isinstance(request_id, str):
                         raise ValueError("requestId inválido.")
 
-                    if message_type == "sign_up":
+                    if message_type == "authenticate":
+                        await handle_authenticate(request.app, ws, request_id, payload)
+                    elif message_type == "sign_up":
                         await handle_sign_up(request.app, ws, request_id, payload)
                     elif message_type == "sign_in":
                         await handle_sign_in(request.app, ws, request_id, payload)
@@ -150,6 +152,22 @@ async def websocket_handler(request):
         print(f"Cliente {ws.user_id or ''} desconectado.")
 
     return ws
+
+
+async def handle_authenticate(app, ws, request_id, payload):
+    user_id = payload.get("userId")
+    if not user_id:
+        await send_error(ws, request_id, "userId é obrigatório para autenticação.")
+        return
+
+    ws.user_id = user_id
+    app['active_connections'][user_id] = ws
+
+    await ws.send_json({
+        "type": "authenticate_success",
+        "requestId": request_id,
+        "payload": {"status": "authenticated", "userId": user_id}
+    })
 
 
 async def handle_sign_up(app, ws, request_id, payload):
@@ -244,28 +262,42 @@ async def handle_conversation_request(app, ws, request_id, payload):
         await send_error(ws, request_id, "recipientId obrigatório.")
         return
 
-    conversation_id = str(uuid.uuid4())
-
     async with app['db_pool'].acquire() as conn:
-        await conn.execute(
+        # BUSCA BI-DIRECIONAL: Checa se A -> B ou B -> A já existe
+        existing_conv = await conn.fetchrow(
             """
-            INSERT INTO conversations (id, requester_id, recipient_id, status)
-            VALUES ($1, $2, $3, 'pending')
+            SELECT id, status FROM conversations 
+            WHERE (requester_id = $1 AND recipient_id = $2)
+               OR (requester_id = $2 AND recipient_id = $1)
             """,
-            conversation_id, ws.user_id, recipient_id
+            ws.user_id, recipient_id
         )
 
-    # Confirma para o solicitante
+        if existing_conv:
+            conversation_id = existing_conv["id"]
+            conv_status = existing_conv["status"]
+        else:
+            conversation_id = str(uuid.uuid4())
+            conv_status = "pending"
+            await conn.execute(
+                """
+                INSERT INTO conversations (id, requester_id, recipient_id, status)
+                VALUES ($1, $2, $3, $4)
+                """,
+                conversation_id, ws.user_id, recipient_id, conv_status
+            )
+
+    # Responde para quem pediu
     await ws.send_json({
         "type": "conversation_request_sent",
         "requestId": request_id,
         "payload": {
             "conversationId": conversation_id,
-            "status": "pending"
+            "status": conv_status
         }
     })
 
-    # Notifica o destinatário em tempo real se ele estiver logado
+    # Notifica o destinatário em tempo real (se estiver online)
     recipient_ws = app['active_connections'].get(recipient_id)
     if recipient_ws:
         await recipient_ws.send_json({
@@ -291,8 +323,8 @@ async def handle_conversation_response(app, ws, request_id, payload):
             """
             UPDATE conversations 
             SET status = $1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2 AND recipient_id = $3
-            RETURNING requester_id
+            WHERE id = $2 AND (recipient_id = $3 OR requester_id = $3)
+            RETURNING requester_id, recipient_id
             """,
             status_str, conversation_id, ws.user_id
         )
@@ -301,7 +333,7 @@ async def handle_conversation_response(app, ws, request_id, payload):
             await send_error(ws, request_id, "Conversa não encontrada ou não autorizada.")
             return
 
-        requester_id = row["requester_id"]
+        other_user_id = row["requester_id"] if row["recipient_id"] == ws.user_id else row["recipient_id"]
 
     await ws.send_json({
         "type": "conversation_response_success",
@@ -309,10 +341,10 @@ async def handle_conversation_response(app, ws, request_id, payload):
         "payload": {"conversationId": conversation_id, "accepted": accepted}
     })
 
-    # Notifica o solicitante sobre a decisão do destinatário
-    requester_ws = app['active_connections'].get(requester_id)
-    if requester_ws:
-        await requester_ws.send_json({
+    # Notifica a outra ponta sobre o aceite/recusa
+    other_ws = app['active_connections'].get(other_user_id)
+    if other_ws:
+        await other_ws.send_json({
             "type": "conversation_status_updated",
             "payload": {
                 "conversationId": conversation_id,
@@ -328,8 +360,11 @@ async def handle_send_message(app, ws, request_id, payload):
         return
 
     conversation_id = payload.get("conversationId")
-    ciphertext = payload.get("ciphertext")
-    iv = payload.get("iv")
+    
+    # Trata o payload se o ciphertext vier na raiz ou aninhado em 'message'
+    message_data = payload.get("message") or {}
+    ciphertext = payload.get("ciphertext") or message_data.get("ciphertext")
+    iv = payload.get("iv") or message_data.get("iv")
 
     if not conversation_id or not ciphertext:
         await send_error(ws, request_id, "Dados de mensagem incompletos.")
@@ -344,8 +379,8 @@ async def handle_send_message(app, ws, request_id, payload):
             conversation_id, ws.user_id
         )
 
-        if not conv or conv["status"] != "accepted":
-            await send_error(ws, request_id, "Conversa inativa ou não autorizada.")
+        if not conv:
+            await send_error(ws, request_id, "Conversa não encontrada.")
             return
 
         message_id = str(uuid.uuid4())
@@ -359,14 +394,14 @@ async def handle_send_message(app, ws, request_id, payload):
 
         target_id = conv["recipient_id"] if conv["requester_id"] == ws.user_id else conv["requester_id"]
 
-    # Retorna o ACK para quem enviou
+    # Confirmação para quem enviou
     await ws.send_json({
         "type": "send_message_success",
         "requestId": request_id,
         "payload": {"messageId": message_id, "conversationId": conversation_id}
     })
 
-    # Transmite o pacote cifrado para o destinatário
+    # Transmite para o destinatário em tempo real
     target_ws = app['active_connections'].get(target_id)
     if target_ws:
         await target_ws.send_json({
