@@ -10,17 +10,33 @@ from aiohttp import web
 from argon2 import PasswordHasher
 # Em backend/server/main.py
 
-from backend.server.handlers.send_message_handler import SendMessageHandler
-from backend.server.handlers.authentication_handler import AuthenticationHandler
-from backend.server.handlers.sign_up_handler import SignUpHandler
-from backend.server.handlers.sign_in_handler import SignInHandler
-from backend.server.handlers.get_messages_handler import GetMessagesHandler
-from backend.server.handlers.conversation_response_handler import ConversationResponseHandler
-from backend.server.handlers.conversation_request_handler import ConversationRequestHandler
-from backend.server.handlers.get_conversations_handler import GetConversationsHandler
-from backend.server.handlers.get_users_handler import GetUsersHandler
+import sys
+from pathlib import Path
 
-from backend.server.authenticated_websocket import AuthenticatedWebSocket
+# Adiciona a raiz do projeto (/opt/render/project/src) e a pasta do server ao sys.path
+SERVER_DIR = Path(__file__).resolve().parent
+ROOT_DIR = SERVER_DIR.parent.parent
+
+for path in [str(SERVER_DIR), str(ROOT_DIR)]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+# ================================================================
+# IMPORTS DOS HANDLERS (Usando imports simples sem o prefixo 'backend.')
+# ================================================================
+
+from handlers.send_message_handler import SendMessageHandler
+from handlers.authentication_handler import AuthenticationHandler
+from handlers.sign_up_handler import SignUpHandler
+from handlers.sign_in_handler import SignInHandler
+from handlers.get_messages_handler import GetMessagesHandler
+from handlers.conversation_response_handler import ConversationResponseHandler
+from handlers.conversation_request_handler import ConversationRequestHandler
+from handlers.get_conversations_handler import GetConversationsHandler
+from handlers.get_users_handler import GetUsersHandler
+
+from authenticated_websocket import AuthenticatedWebSocket
+from initialize_db import initialize_database
 
 
 # ================================================================
