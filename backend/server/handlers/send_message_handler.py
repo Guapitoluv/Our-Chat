@@ -167,3 +167,19 @@ class SendMessageHandler:
                 request_id,
                 "Erro interno ao processar e salvar a mensagem."
             )
+
+        except Exception as e:
+            import traceback
+
+            print(
+                f"[SendMessageHandler] "
+                f"{type(e).__name__}: {e!r}",
+                flush=True
+            )
+            traceback.print_exc()
+
+            await ws.send_error(
+                request_id,
+                "Erro interno ao processar e salvar a mensagem."
+            )
+
