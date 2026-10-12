@@ -68,7 +68,15 @@ class GetMessagesHandler:
                 if before:
                     rows: list[asyncpg.Record] = await conn.fetch(
                         """
-                        SELECT id, conversation_id, sender_id, ciphertext, sender_ciphertext, iv, created_at
+                        SELECT
+  id,
+  conversation_id,
+  sender_id,
+  ciphertext,
+  sender_ciphertext,
+  iv,
+  sender_iv,
+  created_at
                         FROM messages
                         WHERE conversation_id = $1 AND created_at < (
                             SELECT created_at FROM messages WHERE id = $2
@@ -81,7 +89,15 @@ class GetMessagesHandler:
                 else:
                     rows = await conn.fetch(
                         """
-                        SELECT id, conversation_id, sender_id, ciphertext, sender_ciphertext, iv, created_at
+                        SELECT
+  id,
+  conversation_id,
+  sender_id,
+  ciphertext,
+  sender_ciphertext,
+  iv,
+  sender_iv,
+  created_at
                         FROM messages
                         WHERE conversation_id = $1
                         ORDER BY created_at DESC
