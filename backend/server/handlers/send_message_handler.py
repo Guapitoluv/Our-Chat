@@ -50,11 +50,11 @@ class SendMessageHandler:
         raw_client_message_id = payload.get("clientMessageId")
 
         if raw_client_message_id is None:
-            client_message_id = uuid.uuid4()
+            client_message_id = str(uuid.uuid4())
         else:
             try:
-                client_message_id = uuid.UUID(
-                    str(raw_client_message_id)
+                client_message_id = str(
+                    uuid.UUID(str(raw_client_message_id))
                 )
             except (ValueError, TypeError, AttributeError):
                 await ws.send_error(
@@ -62,7 +62,6 @@ class SendMessageHandler:
                     "clientMessageId inválido."
                 )
                 return
-
         if (
             not isinstance(conversation_id, str)
             or not conversation_id
