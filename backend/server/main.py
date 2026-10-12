@@ -173,7 +173,7 @@ app: web.Application = web.Application()
 app.router.add_get("/ws", websocket_handler)
 
 # Registra Hooks do Ciclo de Vida do Aplicativo
-app.on_startup.append(partial(initialize_database, url=DATABASE_URL))
+app.on_startup.append(initialize_database)
 app.on_cleanup.append(cleanup_database)
 
 if __name__ == "__main__":
