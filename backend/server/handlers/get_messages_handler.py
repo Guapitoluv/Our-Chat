@@ -118,6 +118,7 @@ class GetMessagesHandler:
                         "ciphertext": r["ciphertext"],
                         "senderCiphertext": r["sender_ciphertext"],
                         "iv": r["iv"],
+                        "senderIv": r["sender_iv"],
                         "createdAt": r["created_at"].isoformat() if r["created_at"] else None
                     })
         
