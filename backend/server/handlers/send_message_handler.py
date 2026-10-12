@@ -157,17 +157,7 @@ class SendMessageHandler:
                         "iv": iv
                     }
                 })
-
-        except Exception as e:
-            print(
-                f"Erro ao salvar mensagem no DB: {e!r}"
-            )
-
-            await ws.send_error(
-                request_id,
-                "Erro interno ao processar e salvar a mensagem."
-            )
-
+        
         except Exception as e:
             import traceback
 
