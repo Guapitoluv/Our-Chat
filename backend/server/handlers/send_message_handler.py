@@ -5,7 +5,7 @@ from typing import Any
 import asyncpg
 from aiohttp import web
 
-# from authentication_websocket import AuthenticatedWebSocket
+from authentication_websocket import AuthenticatedWebSocket
 
 
 class SendMessageHandler:
