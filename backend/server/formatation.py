@@ -1,7 +1,7 @@
 from typing import Any
 
 import asyncpg
-
+import json
 
 def format_user_row(row: asyncpg.Record) -> dict[str, Any]:
     user: dict[str, Any] = dict(row)
