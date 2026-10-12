@@ -53,6 +53,7 @@ async def initialize_database(app: web.Application) -> None:
                     ciphertext TEXT NOT NULL,
                     sender_ciphertext TEXT,
                     iv TEXT,
+                    sender_iv TEXT,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
 
