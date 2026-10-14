@@ -1,21 +1,28 @@
+
+import json
 from typing import Any
 
 import asyncpg
-import json
+
 
 def format_user_row(row: asyncpg.Record) -> dict[str, Any]:
     user: dict[str, Any] = dict(row)
+
     if user.get("created_at"):
         user["created_at"] = user["created_at"].isoformat()
-    if isinstance(user.get("public_key"), str):
-        user["public_key"] = json.loads(user["public_key"])
-    if isinstance(user.get("encrypted_backup"), str):
-        user["encrypted_backup"] = json.loads(user["encrypted_backup"])
+
+    # ALTERADO: converte JSON textual para objetos Python quando necessário.
+    for field in ("public_key", "encrypted_backup"):
+        if isinstance(user.get(field), str):
+            user[field] = json.loads(user[field])
+
     return user
 
 
 def format_user_payload(user_row: asyncpg.Record) -> dict[str, Any]:
-    user_data: dict[str, Any] = format_user_row(user_row)
+    user_data = format_user_row(user_row)
+
+    # ALTERADO: não expõe o backup criptografado nas respostas comuns.
     return {
         "id": user_data["id"],
         "name": user_data["name"],
