@@ -9,9 +9,9 @@ import jwt
 from aiohttp import web
 from argon2 import PasswordHasher
 
-from ..authenticated_websocket import AuthenticatedWebSocket
-from ..formatation import format_user_payload
-from ..services.presence_manager import PresenceManager
+from authenticated_websocket import AuthenticatedWebSocket
+from formatation import format_user_payload
+from services.presence_manager import PresenceManager
 
 
 class SignUpHandler:
