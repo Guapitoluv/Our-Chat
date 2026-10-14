@@ -66,7 +66,6 @@ class SignInHandler:
             # app["active_connections"], removido na nova arquitetura.
             await self.presence_manager.register(user_id, ws)
             ws.set_user_id(user_id)
-            ws.set_authenticated(True)
 
             await ws.send_json({
                 "type": "sign_in_success",
