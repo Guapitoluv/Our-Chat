@@ -21,7 +21,10 @@ class PresenceManager:
         user_id: str,
         ws: AuthenticatedWebSocket
     ) -> None:
+        print(f"registering: {user_id}")
+        
         async with self._lock:
+            print("start async with self._lock")
             connections: set[
                 AuthenticatedWebSocket
             ] = self.active_connections.setdefault(
@@ -32,7 +35,9 @@ class PresenceManager:
             connections.add(ws)
 
             should_broadcast: bool = not was_online
-
+            print("end async with self._lock")
+        
+        print(f"should broadcast: {should_broadcast}")
         if should_broadcast:
             await self.broadcast_presence(
                 user_id,
@@ -72,6 +77,7 @@ class PresenceManager:
         user_id: str,
         user_status: str
     ) -> None:
+        print(f"broadcasting presence: {user_id}, {user_status}")
         contact_ids: list[
             str
         ] = await self._get_contact_ids(user_id)
@@ -101,6 +107,8 @@ class PresenceManager:
                         f"Erro ao enviar presença para "
                         f"{contact_id}: {exc}"
                     )
+        
+        print(f"end of broadcast: ids={contact_ids}")
 
     async def _get_contact_ids(self, user_id: str) -> list[str]:
         async with self.app["db_pool"].acquire() as conn:
