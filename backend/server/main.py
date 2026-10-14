@@ -55,7 +55,9 @@ password_hasher = PasswordHasher()
 # INSTÂNCIAS DOS HANDLERS
 # ================================================================
 
-send_message_handler = SendMessageHandler()
+send_message_handler = SendMessageHandler(
+    presence_manager=presence_manager
+)
 
 authentication_handler = AuthenticationHandler(
     presence_manager=presence_manager,
@@ -63,18 +65,24 @@ authentication_handler = AuthenticationHandler(
 )
 
 sign_up_handler = SignUpHandler(
+    presence_manager=presence_manager,
     password_hasher=password_hasher,
     jwt_secret=JWT_SECRET
 )
 
 sign_in_handler = SignInHandler(
+    presence_manager=presence_manager,
     password_hasher=password_hasher,
     jwt_secret=JWT_SECRET
 )
 
 get_messages_handler = GetMessagesHandler()
-conversation_response_handler = ConversationResponseHandler()
-conversation_request_handler = ConversationRequestHandler()
+conversation_response_handler = ConversationResponseHandler(
+    presence_manager=presence_manager
+)
+conversation_request_handler = ConversationRequestHandler(
+    presence_manager=presence_manager
+)
 get_conversations_handler = GetConversationsHandler()
 get_users_handler = GetUsersHandler()
 
