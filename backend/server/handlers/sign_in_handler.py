@@ -82,5 +82,5 @@ class SignInHandler:
             print(f"Erro no processo de sign_in: {exc}")
             await ws.send_error(
                 request_id,
-                "Erro interno ao realizar autenticação."
+                f"Erro interno ao realizar autenticação: {exc}"
             )
