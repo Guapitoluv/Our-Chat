@@ -4,8 +4,8 @@ from typing import Any
 import jwt
 from aiohttp import web
 
-from ..authenticated_websocket import AuthenticatedWebSocket
-from ..services.presence_manager import PresenceManager
+from authenticated_websocket import AuthenticatedWebSocket
+from services.presence_manager import PresenceManager
 
 
 class AuthenticationHandler:
