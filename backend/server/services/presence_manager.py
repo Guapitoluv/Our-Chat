@@ -1,88 +1,124 @@
-import logging
+import asyncio
 from typing import Any
 
-import asyncpg
-from aiohttp import web
-
-from authenticated_websocket import AuthenticatedWebSocket
-from formatation import format_user_row
+from ..authenticated_websocket import AuthenticatedWebSocket
 
 
-logger = logging.getLogger(__name__)
+class PresenceManager:
+    ONLINE_STATUS = "online"
+    OFFLINE_STATUS = "offline"
 
+    def __init__(self, app) -> None:
+        self.active_connections: dict[
+            str, set[AuthenticatedWebSocket]
+        ] = {}
 
-class GetUsersHandler:
-    async def handle_get_users(
+        self.app = app
+        self._lock = asyncio.Lock()
+
+    async def register(
         self,
-        app: web.Application,
-        ws: AuthenticatedWebSocket,
-        request_id: str,
-        payload: dict[str, Any]
+        user_id: str,
+        ws: AuthenticatedWebSocket
     ) -> None:
-        if not ws.is_authenticated:
-            await ws.send_error(request_id, "Não autenticado.")
-            return
+        user_id = str(user_id)
 
-        current_user_id = ws.get_user_id()
-
-        if not current_user_id:
-            await ws.send_error(
-                request_id,
-                "Sessão de usuário inválida."
+        async with self._lock:
+            connections = self.active_connections.setdefault(
+                user_id, set()
             )
-            return
 
-        try:
-            db_pool: asyncpg.Pool = app["db_pool"]
-            presence_manager = app["presence_manager"]
+            was_online = bool(connections)
+            connections.add(ws)
 
-            async with db_pool.acquire() as conn:
-                rows = await conn.fetch(
-                    """
-                    SELECT
-                        id,
-                        name,
-                        email,
-                        role,
-                        public_key,
-                        created_at
-                    FROM users
-                    WHERE id <> $1
-                    ORDER BY name ASC, id ASC
-                    """,
-                    current_user_id
+            should_broadcast = not was_online
+
+        if should_broadcast:
+            await self.broadcast_presence(
+                user_id,
+                self.ONLINE_STATUS
+            )
+
+    async def unregister(
+        self,
+        user_id: str,
+        ws: AuthenticatedWebSocket
+    ) -> None:
+        user_id = str(user_id)
+
+        async with self._lock:
+            connections = self.active_connections.get(user_id)
+
+            if not connections:
+                return
+
+            connections.discard(ws)
+
+            if connections:
+                return
+
+            del self.active_connections[user_id]
+
+        await self.broadcast_presence(
+            user_id,
+            self.OFFLINE_STATUS
+        )
+
+    async def get_user_status(
+        self,
+        user_ids: list[str]
+    ) -> dict[str, str]:
+        # Lê um snapshot consistente das conexões registradas.
+        async with self._lock:
+            return {
+                str(user_id): (
+                    self.ONLINE_STATUS
+                    if self.active_connections.get(str(user_id))
+                    else self.OFFLINE_STATUS
+                )
+                for user_id in user_ids
+            }
+
+    async def broadcast_presence(
+        self,
+        user_id: str,
+        user_status: str
+    ) -> None:
+        contact_ids = await self._get_contact_ids(user_id)
+
+        message: dict[str, Any] = {
+            "type": "presence_update",
+            "payload": {
+                "userId": str(user_id),
+                "status": user_status
+            }
+        }
+
+        for contact_id in contact_ids:
+            # Não mantém o lock durante o envio pela rede.
+            async with self._lock:
+                connections = tuple(
+                    self.active_connections.get(str(contact_id), ())
                 )
 
-            users = [format_user_row(row) for row in rows]
+            for contact_ws in connections:
+                try:
+                    await contact_ws.send_json(message)
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        "Falha ao enviar presença: destinatário=%s",
+                        contact_id
+                    )
 
-            # Extrai os IDs já formatados para consultar a presença.
-            user_ids = [str(user["id"]) for user in users]
-
-            statuses = await presence_manager.get_user_status(
-                user_ids
+    async def _get_contact_ids(
+        self,
+        user_id: str
+    ) -> list[str]:
+        async with self.app["db_pool"].acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id FROM users WHERE id != $1",
+                user_id
             )
 
-            for user in users:
-                user["status"] = statuses.get(
-                    str(user["id"]),
-                    "offline"
-                )
-
-            await ws.send_json({
-                "type": "get_users_success",
-                "requestId": request_id,
-                "payload": {
-                    "users": users
-                }
-            })
-
-        except Exception:
-            logger.exception(
-                "Erro ao buscar usuários: request_id=%s",
-                request_id
-            )
-
-            await ws.send_error(
-                request_id,
-                "Erro interno ao carregar os usuários."
-            )
+        return [str(row["id"]) for row in rows]
