@@ -76,7 +76,6 @@ class AuthenticationHandler:
 
             # Atualiza o estado da conexão após o registro.
             ws.set_user_id(user_id)
-            ws.set_authenticated(True)
 
             await ws.send_json({
                 "type": "authenticate_success",
