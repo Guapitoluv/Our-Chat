@@ -64,7 +64,9 @@ class SignInHandler:
 
             # ALTERADO: registra a conexão no PresenceManager em vez de
             # app["active_connections"], removido na nova arquitetura.
+            print("before register in sign-in")
             await self.presence_manager.register(user_id, ws)
+            print("after register in sign-in")
             ws.set_user_id(user_id)
 
             await ws.send_json({
