@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 import asyncpg
@@ -7,10 +8,10 @@ from authenticated_websocket import AuthenticatedWebSocket
 from formatation import format_user_row
 
 
-class GetUsersHandler:
-    def __init__(self) -> None:
-        pass
+logger = logging.getLogger(__name__)
 
+
+class GetUsersHandler:
     async def handle_get_users(
         self,
         app: web.Application,
@@ -33,10 +34,9 @@ class GetUsersHandler:
 
         try:
             db_pool: asyncpg.Pool = app["db_pool"]
+            presence_manager = app["presence_manager"]
 
             async with db_pool.acquire() as conn:
-                # Alterado: exclui o usuário atual da lista de contatos
-                # e seleciona apenas campos necessários à interface.
                 rows = await conn.fetch(
                     """
                     SELECT
@@ -53,9 +53,20 @@ class GetUsersHandler:
                     current_user_id
                 )
 
-            # Mantém a conversão de campos e datas centralizada
-            # no formatador existente no projeto.
             users = [format_user_row(row) for row in rows]
+
+            # Extrai os IDs já formatados para consultar a presença.
+            user_ids = [str(user["id"]) for user in users]
+
+            statuses = await presence_manager.get_user_status(
+                user_ids
+            )
+
+            for user in users:
+                user["status"] = statuses.get(
+                    str(user["id"]),
+                    "offline"
+                )
 
             await ws.send_json({
                 "type": "get_users_success",
@@ -65,8 +76,11 @@ class GetUsersHandler:
                 }
             })
 
-        except Exception as exc:
-            print(f"Erro ao buscar usuários: {exc}")
+        except Exception:
+            logger.exception(
+                "Erro ao buscar usuários: request_id=%s",
+                request_id
+            )
 
             await ws.send_error(
                 request_id,
