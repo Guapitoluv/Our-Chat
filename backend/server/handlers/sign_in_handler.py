@@ -30,43 +30,85 @@ class SignInHandler:
         request_id: str,
         payload: dict[str, Any]
     ) -> None:
+        # ALTERADO: registra o início do método e força a saída imediata.
+        print("[SIGN_IN] Método iniciado", flush=True)
+
         email = str(payload.get("email", "")).strip().lower()
         password = str(payload.get("password", ""))
 
         if not email or not password:
-            await ws.send_error(request_id, "E-mail e senha são obrigatórios.")
+            print("[SIGN_IN] Credenciais ausentes", flush=True)
+            await ws.send_error(
+                request_id,
+                "E-mail e senha são obrigatórios."
+            )
             return
 
         try:
+            # ALTERADO: identifica se a execução chega à consulta SQL.
+            print("[SIGN_IN] Consultando banco", flush=True)
+
             async with app["db_pool"].acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT * FROM users WHERE email = $1", email
+                    "SELECT * FROM users WHERE email = $1",
+                    email
                 )
+
+            print("[SIGN_IN] Consulta concluída", flush=True)
 
             if not row:
-                await ws.send_error(request_id, "E-mail ou senha incorretos.")
+                print("[SIGN_IN] Usuário não encontrado", flush=True)
+                await ws.send_error(
+                    request_id,
+                    "E-mail ou senha incorretos."
+                )
                 return
 
-            # Mantido: Argon2 roda em outra thread para não bloquear o Event Loop.
+            # ALTERADO: identifica o início da verificação da senha.
+            print("[SIGN_IN] Verificando senha", flush=True)
+
             try:
                 await asyncio.to_thread(
-                    self.password_hasher.verify, row["password_hash"], password
+                    self.password_hasher.verify,
+                    row["password_hash"],
+                    password
                 )
-            except Exception:
-                await ws.send_error(request_id, "E-mail ou senha incorretos.")
+            except Exception as exc:
+                # ALTERADO: registra o tipo do erro sem expor a senha.
+                print(
+                    f"[SIGN_IN] Falha na verificação: "
+                    f"{type(exc).__name__}",
+                    flush=True
+                )
+                await ws.send_error(
+                    request_id,
+                    "E-mail ou senha incorretos."
+                )
                 return
 
             user_data = format_user_row(row)
             user_id = user_data["id"]
+
             token = jwt.encode(
-                {"user_id": user_id}, self.jwt_secret, algorithm="HS256"
+                {"user_id": user_id},
+                self.jwt_secret,
+                algorithm="HS256"
             )
 
-            # ALTERADO: registra a conexão no PresenceManager em vez de
-            # app["active_connections"], removido na nova arquitetura.
-            print("before register in sign-in")
+            # ALTERADO: verifica se o registro de presença é alcançado.
+            print(
+                "[SIGN_IN] Antes de registrar presença",
+                flush=True
+            )
+
             await self.presence_manager.register(user_id, ws)
-            print("after register in sign-in")
+
+            # ALTERADO: só aparece se register() terminar com sucesso.
+            print(
+                "[SIGN_IN] Presença registrada",
+                flush=True
+            )
+
             ws.set_user_id(user_id)
 
             await ws.send_json({
@@ -79,9 +121,18 @@ class SignInHandler:
                 }
             })
 
+            print("[SIGN_IN] Resposta enviada", flush=True)
+
         except Exception as exc:
-            print(f"Erro no processo de sign_in: {exc}")
+            # ALTERADO: inclui o tipo da exceção para facilitar o diagnóstico.
+            print(
+                f"[SIGN_IN] Erro: {type(exc).__name__}: {exc}",
+                flush=True
+            )
+
+            # Mantém o fluxo original de resposta de erro.
+            # Em produção, não exponha detalhes internos da exceção ao cliente.
             await ws.send_error(
                 request_id,
-                f"Erro interno ao realizar autenticação: {exc}"
+                "Erro interno ao realizar autenticação."
             )
