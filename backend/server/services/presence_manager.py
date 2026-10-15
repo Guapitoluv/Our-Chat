@@ -1,7 +1,7 @@
 import asyncio
 from typing import Any
 
-from ..authenticated_websocket import AuthenticatedWebSocket
+from authenticated_websocket import AuthenticatedWebSocket
 
 
 class PresenceManager:
