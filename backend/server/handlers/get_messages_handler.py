@@ -4,7 +4,7 @@ from typing import Any
 import asyncpg
 from aiohttp import web
 
-from authenticated_websocket import AuthenticatedWebSocket
+from ..authenticated_websocket import AuthenticatedWebSocket
 
 
 class GetMessagesHandler:
@@ -129,6 +129,7 @@ class GetMessagesHandler:
                             ciphertext,
                             sender_ciphertext,
                             iv,
+                            sender_iv,
                             created_at
                         FROM messages
                         WHERE conversation_id = $1
@@ -155,6 +156,7 @@ class GetMessagesHandler:
                             ciphertext,
                             sender_ciphertext,
                             iv,
+                            sender_iv,
                             created_at
                         FROM messages
                         WHERE conversation_id = $1
@@ -184,6 +186,7 @@ class GetMessagesHandler:
                         "ciphertext": row["ciphertext"],
                         "senderCiphertext": row["sender_ciphertext"],
                         "iv": row["iv"],
+                        "senderIv": row["sender_iv"],
                         "createdAt": (
                             row["created_at"].isoformat()
                             if row["created_at"] else None
